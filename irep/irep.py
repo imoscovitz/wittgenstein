@@ -40,13 +40,16 @@ class IREP:
         if not self.pos_class:
             self.pos_class = df.iloc[0][class_feat]
 
+        # Split df into pos, neg classes
+        pos_df, neg_df = pos_neg_split(df, self.class_feat, self.pos_class)
+
         # Grow Ruleset
         self.ruleset = Ruleset()
         if prune:
-            self.ruleset.grow_pruned(df, self.class_feat, self.pos_class,
+            self.ruleset.grow_pruned(pos_df, neg_df, self.class_feat, self.pos_class,
                                      prune_size=self.prune_size, seed=seed, display=display)
         else:
-            self.ruleset.grow_unpruned(df, self.class_feat, self.pos_class, display=display)
+            self.ruleset.grow_unpruned(pos_df, neg_df, self.class_feat, self.pos_class, display=display)
 
         self.isfit = True
 
@@ -97,16 +100,17 @@ class Ruleset:
                 covered = covered.append(rule.covers(df))
             return covered
 
-    def grow_unpruned(self, df, class_feat, pos_class, display=False):
+    def grow_unpruned(self, pos_df, neg_df, class_feat, pos_class, display=False):
         """ Grow a Ruleset without pruning. Not recommended. """
 
-        remaining = df.copy()
+        remaining_pos = pos_df.copy()
+        remaining_neg = neg_df.copy()
         self.rules = []
-        while num_pos(remaining, class_feat, pos_class) > 0: # Stop adding disjunctions if there are no more positive examples to cover
+        while len(remaining_pos) > 0: # Stop adding disjunctions if there are no more positive examples to cover
             #if display: print('Remaining pos:',num_pos(remaining, class_feat, pos_class))
 
             rule = Rule()
-            rule.grow(remaining, class_feat, pos_class, display=display)
+            rule.grow(remaining_pos, remaining_neg, class_feat, pos_class, display=display)
             #if display:print(rule)
             #if display: print('Grown:',rule,'\n')
 
@@ -114,40 +118,46 @@ class Ruleset:
                 #if display: print(f'finished growing {self}')
                 break
 
-            rule_covers = rule.covers(remaining)
+            pos_covered = rule.covers(remaining_pos)
+            neg_covered = rule.covers(remaining_neg)
+
             #if display:print(f'rule covered {rule_covers}')
             #if display: print('new_rule_covers:',rule_covers,'\n')
 
-            rule_covers_pos = pos(rule_covers, class_feat, pos_class)
+
             #if display:print(f'pos covered {rule_covers_pos}')
             #if display: print('rule_covers_pos',rule_covers)
 
-            remaining.drop(rule_covers_pos.index, axis=0, inplace=True)
+            remaining_pos.drop(pos_covered.index, axis=0, inplace=True)
+
             #if display:print(f'remaining {len(remaining)}')
             self.rules.append(rule)
             #if display:print(f'Ruleset is {self}')
             #if display:print()
 
-    def grow_pruned(self, df, class_feat, pos_class, prune_size=.33, seed=None, display=False):
+    def grow_pruned(self, pos_df, neg_df, class_feat, pos_class, prune_size=.33, seed=None, display=False):
         """ Grow a Ruleset with pruning. """
 
-        remaining = df.copy()
+        pos_remaining = pos_df.copy()
+        neg_remaining = neg_df.copy()
         self.rules = []
-        while num_pos(remaining, class_feat, pos_class) > 0: # Stop adding disjunctions if there are no more positive examples to cover
-            growset, pruneset = df_shuffled_split(remaining, prune_size, seed=seed)
+        while len(pos_remaining) > 0: # Stop adding disjunctions if there are no more positive examples to cover
+            pos_growset, pos_pruneset = df_shuffled_split(pos_remaining, prune_size, seed=seed)
+            neg_growset, neg_pruneset = df_shuffled_split(neg_remaining, prune_size, seed=seed)
             grown_rule = Rule()
-            grown_rule.grow(growset, class_feat, pos_class, display=display)
+            grown_rule.grow(pos_growset, neg_growset, class_feat, pos_class, display=display)
             #if display: print("Grown:",grown_rule)
 
-            pruned_rule = grown_rule.pruned(pruneset, class_feat, pos_class) # Pruned is a make -- not a modifier -- method
+            pruned_rule = grown_rule.pruned(pos_pruneset, neg_pruneset, class_feat, pos_class) # Pruned is a make -- not a modifier -- method
             #if display: print("Pruned to:",pruned_rule)
 
-            prune_precision = precision(pruned_rule, pruneset, class_feat, pos_class)
+            prune_precision = precision(pruned_rule, pos_pruneset, neg_pruneset, class_feat, pos_class)
             if not prune_precision or prune_precision < .50:
                 break
             else:
                 self.rules.append(pruned_rule)
-                remaining.drop(pruned_rule.covers(remaining).index, axis=0, inplace=True)
+                pos_remaining.drop(pruned_rule.covers(pos_remaining).index, axis=0, inplace=True)
+                neg_remaining.drop(pruned_rule.covers(neg_remaining).index, axis=0, inplace=True)
                 #if display: print("Updated ruleset:",self,'\n')
 
 class Rule:
@@ -185,22 +195,22 @@ class Rule:
         """ Returns list of features covered by the Rule """
         return [cond.feature for cond in self.conds]
 
-    def grow(self, df, class_feat, pos_class, display=False, sleep=False):
+    def grow(self, pos_df, neg_df, class_feat, pos_class, display=False, sleep=False):
         """ Fit a new rule to add to a ruleset """
-        while num_neg(self.covers(df), class_feat, pos_class) > 0: # Stop refining rule if no negative examples remain
+        while len(self.covers(neg_df)) > 0: # Stop refining rule if no negative examples remain
             #if display:print(f'neg {num_neg(self.covers(df), class_feat, pos_class)}')
             #if display: print("Update:", self)
             #if sleep: time.sleep(1)
 
-            best_successor_rule = self.best_successor(df, class_feat, pos_class, display=display)
+            best_successor_rule = self.best_successor(pos_df, neg_df, class_feat, pos_class, display=display)
             #if display:print(f'best_successor_rule {best_successor_rule}')
             if best_successor_rule is not None:
                 self.conds = best_successor_rule.conds
             else:
                 break
 
-    def pruned(self, pruneset, class_feat, pos_class, display=False):
-        """ Prunes a Rule by removing Conds """
+    def pruned(self, pos_pruneset, neg_pruneset, class_feat, pos_class, display=False):
+        """ Returns a pruned version of the Rule by removing Conds """
 
         # Currently-best pruned rule and its prune value
         best_rule = copy.deepcopy(self)
@@ -209,7 +219,7 @@ class Rule:
         current_rule = copy.deepcopy(self)
 
         while current_rule.conds:
-            v = current_rule.prune_value(pruneset, class_feat, pos_class)
+            v = current_rule.prune_value(pos_pruneset, neg_pruneset, class_feat, pos_class)
             if v > best_v:
                 best_v = v
                 best_rule = copy.deepcopy(current_rule)
@@ -220,13 +230,13 @@ class Rule:
     ##### Rule::grow/prune helper functions #####
     #############################################
 
-    def best_successor(self, df, class_feat, pos_class, display=False):
+    def best_successor(self, pos_df, neg_df, class_feat, pos_class, display=False):
         """ Returns for a Rule its best successor Rule based on information gain metric. """
 
         best_gain = 0
         best_successor_rule = None
-        for successor in self.successors(df, class_feat):
-            g = self.gain(successor, df, class_feat, pos_class)
+        for successor in self.successors(neg_df, class_feat):
+            g = self.gain(successor, pos_df, neg_df, class_feat, pos_class)
             if g > best_gain:
                 best_gain = g
                 best_successor_rule = successor
@@ -239,26 +249,24 @@ class Rule:
         """ Returns a list of all valid successor rules. """
 
         successor_rules = []
-        for feat in df.columns.values:
+        for feat in df.drop(class_feat,axis=1).columns.values:
             for val in df[feat].unique():
-                if feat not in self.covered_feats() and feat != class_feat: # Conds already in Rule and Conds that contradict Rule aren't valid successors
+                if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors
                     successor_rules.append(self+Cond(feat, val))
         return successor_rules
 
-    def gain(self, other, df, class_feat, pos_class):
+    def gain(self, other, pos_df, neg_df, class_feat, pos_class):
         """ Returns the information gain from self (rule0) to other (rule1) """
 
-        p0count = self.num_covered(pos(df, class_feat, pos_class))
-        p1count = other.num_covered(pos(df, class_feat, pos_class))
-        n0count = self.num_covered(neg(df, class_feat, pos_class))
-        n1count = other.num_covered(neg(df, class_feat, pos_class))
+        p0count = self.num_covered(pos_df)
+        p1count = other.num_covered(pos_df)
+        n0count = self.num_covered(neg_df)
+        n1count = other.num_covered(neg_df)
         return p1count * (math.log2((p1count + 1) / (p1count + n1count + 1)) - math.log2((p0count + 1) / (p0count + n0count + 1)))
 
-    def prune_value(self, pruneset, class_feat, pos_class):
+    def prune_value(self, pos_pruneset, neg_pruneset, class_feat, pos_class):
         """ Returns the prune value of a candidate Rule """
 
-        pos_pruneset = pos(pruneset, class_feat, pos_class)
-        neg_pruneset = neg(pruneset, class_feat, pos_class)
         P = len(pos_pruneset)
         N = len(neg_pruneset)
         p = self.num_covered(pos_pruneset)
@@ -292,16 +300,18 @@ class Cond:
     ##### METRICS #####
     ###################
 
-def precision(object, df, class_feat, pos_class):
+def precision(object, pos_df, neg_df, class_feat, pos_class):
     """ Returns precision value of object's classification.
         object: Cond, Rule, or Ruleset
     """
 
-    covered = object.covers(df)
-    if len(covered) == 0:
+    pos_covered = object.covers(pos_df)
+    neg_covered = object.covers(neg_df)
+    total_n_covered = len(pos_covered)+len(neg_covered)
+    if total_n_covered == 0:
         return None
     else:
-        return num_pos(covered, class_feat, pos_class) / len(covered)
+        return len(pos_covered) / total_n_covered
 
 
 def give_reasons(irep_, df): # Experimental
@@ -316,6 +326,12 @@ def give_reasons(irep_, df): # Experimental
     ###################
     ##### HELPERS #####
     ###################
+
+def pos_neg_split(df, class_feat, pos_class):
+    """ Split df into pos and neg classes. """
+    pos_df = pos(df, class_feat, pos_class)
+    neg_df = neg(df, class_feat, pos_class)
+    return pos_df, neg_df
 
 def pos(df, class_feat, pos_class):
     """ Returns subset of instances that are labeled positive. """
