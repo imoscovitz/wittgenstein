@@ -303,6 +303,16 @@ def precision(object, df, class_feat, pos_class):
     else:
         return num_pos(covered, class_feat, pos_class) / len(covered)
 
+
+def give_reasons(irep_, df): # Experimental
+    def pos_reasons(example):
+        print(example)
+        assert len(example)==1
+        return [rule for rule in irep_.ruleset.rules if len(rule.covers(example))==1]
+
+    return [pos_reasons(df[df.index==i]) for i in df.index]
+
+
     ###################
     ##### HELPERS #####
     ###################
