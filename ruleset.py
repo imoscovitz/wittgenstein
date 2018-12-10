@@ -1,7 +1,6 @@
 """
 This module implements incremental reduced error pruning (IREP*) algorithm
 for growing classification rulesets.
-
 See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 """
 
@@ -14,7 +13,7 @@ import random
 import copy
 
 class IREP:
-    # """ Class for generating ruleset classification models. """
+    """ Class for generating ruleset classification models. """
 
     def __init__(self, class_feat, pos_class=None, prune_size=.33):
         self.ruleset = Ruleset()
@@ -30,7 +29,6 @@ class IREP:
 
     def fit(self, df, prune=True, seed=None, display=False):
         """ Fit an IREP to data by growing a classification Ruleset in disjunctive normal form.
-
             class_feat: name of DataFrame class feature
             prune=True/False: whether to prune Ruleset's Rules during its growth
             seed: (optional) random state for grow/prune split (if pruning)
@@ -65,7 +63,6 @@ class IREP:
 
     def score(self, X, y, score_function):
         """ Test performance of fit Ruleset.
-
             score_function: function that takes parameters (actuals, predictions)
             Examples: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
