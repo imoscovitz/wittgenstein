@@ -51,6 +51,12 @@ class RIPPER:
         self.ruleset_ = self.grow_ruleset(pos_df, neg_df,
             prune_size=self.prune_size, dl_allowance=self.dl_allowance,
             seed=seed, verbose=verbose)
+        print(f'GREW INITIAL RULESET: {self.ruleset_}')
+        print()
+        print()
+
+        self.ruleset_ = self.optimize_ruleset(self.ruleset_, pos_df, neg_df,
+            prune_size=self.prune_size)
 
     def predict(self, X):
         """ Predict classes of X """
@@ -70,7 +76,6 @@ class RIPPER:
         predictions = self.predict(X)
         actuals = [yi==self.pos_class for yi in y]
         return score_function(actuals, predictions)
-
 
     def grow_ruleset(self, pos_df, neg_df, prune_size, dl_allowance, seed=None, verbose=False):
         """ Grow a Ruleset with pruning. """
@@ -116,30 +121,53 @@ class RIPPER:
                 print()
         return ruleset
 
-    def optimize_ruleset(self, pos_df, neg_df, prune_size):
-        pos_remaining = pos_df.copy()
-        neg_remaining = neg_df.copy()
-        optimized_ruleset = copy.deepcopy(self.ruleset_)
+    def optimize_ruleset(self, ruleset, pos_df, neg_df, prune_size):
+        ruleset = copy.deepcopy(ruleset)
+        i = 0
+        while i < len(ruleset.rules):
+            # It's unclear whether you're supposed to update disjs before or after done going through all the rules
+            disjs = Ruleset(copy.deepcopy(ruleset.rules[:i])+copy.deepcopy(ruleset.rules[i+1:]))
 
-        for i, rule in enumerate(current_ruleset):
-            current_ruleset = copy.deepcopy(self.ruleset_)
-            replacement = grow_replacement_rule(self, i, current_ruleset)
-            print(f'rule {rule} replacement {replacement}')
+            #print(f'grow replacement for rule {i}: {ruleset.rules[i]}')
+            #replacement = self.grow_alternative(Rule(), disjs, pos_df, neg_df)
+            #print(f'rule {ruleset.rules[i]} replacement: {replacement}')
+            #print()
 
-    def grow_replacement_rule(self, i, ruleset, pos_df, neg_df):
-        """ Fit a new rule to add to a ruleset """
-        rule0 = Rule()
-        rule1 = Rule()
+            print(f'grow revision for rule {i}: {ruleset.rules[i]}')
+            revision = self.grow_alternative(ruleset.rules[i], disjs, pos_df, neg_df)
+            print(f'rule {ruleset.rules[i]} revision: {revision}')
+            print()
+            #if i>=3:
+            #    break
+
+            i+=1
+        return
+
+    def grow_alternative(self, initial_rule, disjs, pos_df, neg_df):
+        """ Grow a new rule, either by adding to the initial rule (revision), or beginning with an empty rule (replacement)
+
+            initial_rule: rule to begin with or empty rule
+            disjs: ruleset excluding the rule we're looking for an alternative for
+        """
+
+        rule0 = copy.deepcopy(initial_rule)
+        rule1 = copy.deepcopy(rule0)
+        print(f'pos_df {len(pos_df)}')
+        print(f'neg_df {len(neg_df)}')
+        print(f'initial covers n_negs: {len(rule0.covers(neg_df))}')
+        print(f'rule1 is {rule1}')
         while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
-            rule1 = rule0.best_successor(pos_df, neg_df)
-            #print(f'growing rule... {rule1}')
+            rule1 = base.best_successor(rule0, pos_df, neg_df, eval_with_ruleset=disjs)
             if rule1 is not None:
                 rule0 = rule1
-
         if rule0.isempty():
             return None
         else:
             return rule0
+
+    def prune_alternative(self, initial_rule, disjs, pos_df, neg_df):
+
+
 
 
 def prune_metric(rule, pos_pruneset, neg_pruneset):
@@ -150,8 +178,8 @@ def prune_metric(rule, pos_pruneset, neg_pruneset):
     p = rule.num_covered(pos_pruneset)
     n = rule.num_covered(neg_pruneset)
     print(f'on pruneset iter, p_covered {p} n_covered {n}')
-    return (p - n + 1) / (p + n + 1)         # Unclear from the paper how they handle divzero when p+n=0, so for now I Laplaced it
-                                             # Weka modified the formula to (p+1)/(p+n+2), but it gives different values
+    return (p - n + 1) / (p + n + 1)         # Unclear from the paper how they handle divzero (where p+n=0), so for now I Laplaced it.
+                                             # Weka's solution was to modify the formula to (p+1)/(p+n+2), but that gives different values
 
     #if (p+n) == 0:
     #    return None

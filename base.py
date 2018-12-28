@@ -84,22 +84,6 @@ class Rule:
     ##### Rule::grow/prune helper functions #####
     #############################################
 
-    def best_successor(self, pos_df, neg_df, eval_with=None):
-        """ Returns for a Rule its best successor Rule based on FOIL information gain metric.
-            eval_with: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
-        """
-        best_gain = 0
-        best_successor_rule = None
-        for successor in self.successors(pos_df, neg_df):
-            g = gain(self, successor, pos_df, neg_df)
-            if g > best_gain:
-                best_gain = g
-                best_successor_rule = successor
-            #print(f'try successor {g, successor}')
-
-        #if display: print("Best Gain:", str(best_gain))
-        return best_successor_rule
-
     def successors(self, pos_df, neg_df):
         """ Returns a list of all valid successor rules. """
 
@@ -142,7 +126,7 @@ def grow_rule(pos_df, neg_df):
     rule0 = Rule()
     rule1 = Rule()
     while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
-        rule1 = rule0.best_successor(pos_df, neg_df)
+        rule1 = best_successor(rule0, pos_df, neg_df)
         #print(f'growing rule... {rule1}')
         if rule1 is not None:
             rule0 = rule1
@@ -198,6 +182,41 @@ def precision(object, pos_df, neg_df):
         return None
     else:
         return len(pos_covered) / total_n_covered
+
+def best_successor(rule, pos_df, neg_df, eval_with_ruleset=None):
+    """ Returns for a Rule its best successor Rule according to FOIL information gain metric.
+
+        eval_with_ruleset: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
+    """
+    # Optimization todo: don't need to look up coverage each time for all the other rules
+
+    if not eval_with_ruleset:
+        best_gain = 0
+        best_successor_rule = None
+        for successor in rule.successors(pos_df, neg_df):
+            g = gain(rule, successor, pos_df, neg_df)
+            if g > best_gain:
+                best_gain = g
+                best_successor_rule = successor
+        return best_successor_rule
+
+    else:
+        current_ruleset = copy.deepcopy(eval_with_ruleset)
+        current_ruleset.add(rule)
+
+        best_ruleset = copy.deepcopy(current_ruleset)
+        best_gain = 0
+
+        for successor in rule.successors(pos_df, neg_df):
+
+            current_ruleset.rules[-1] = successor
+            g = gain(best_ruleset, current_ruleset, pos_df, neg_df)
+            print(f'successor {successor} gain {round(g,0)}')
+            if g > best_gain:
+                best_gain = g
+                best_ruleset.rules[-1] = copy.deepcopy(current_ruleset.rules[-1])
+        print(f'best successor: {best_ruleset.rules[-1]}')
+        return best_ruleset.rules[-1]
 
 def give_reasons(irep_, df):
     """ Experimental """
