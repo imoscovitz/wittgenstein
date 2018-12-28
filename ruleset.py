@@ -16,14 +16,12 @@ class IREP:
     """ Class for generating ruleset classification models. """
 
     def __init__(self, class_feat, pos_class=None, prune_size=.33):
-        self.ruleset = Ruleset()
         self.class_feat = class_feat
         self.pos_class = pos_class
         self.prune_size = prune_size
-        self.isfit = False;
 
     def __str__(self):
-        fitstr = f'fit ruleset={self.ruleset}' if self.isfit else 'not fit'
+        fitstr = f'fit ruleset={self.ruleset}' if hasattr(self,'ruleset_') else 'not fit'
         return f'<IREP object {fitstr}>'
     __repr__ = __str__
 
@@ -44,19 +42,17 @@ class IREP:
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
         # Grow Ruleset
-        self.ruleset = Ruleset()
+        self.ruleset_ = Ruleset()
         if prune:
-            self.ruleset.grow_pruned(pos_df, neg_df, prune_size=self.prune_size, seed=seed, display=display)
+            self.ruleset_.grow_pruned(pos_df, neg_df, prune_size=self.prune_size, seed=seed, display=display)
         else:
-            self.ruleset.grow_unpruned(pos_df, neg_df, display=display)
-
-        self.isfit = True
+            self.ruleset_.grow_unpruned(pos_df, neg_df, display=display)
 
     def predict(self, X):
         """ Predict classes of X """
 
-        if self.isfit:
-            covered_indices = self.ruleset.covers(X).index
+        if hasattr(self, 'ruleset_'):
+            covered_indices = self.ruleset_.covers(X).index
             return [covered_i in covered_indices for covered_i in X.index]
         else:
             raise AttributeError('You should fit an IREP object before making predictions with it.')
@@ -78,6 +74,7 @@ class Ruleset:
 
     def __init__(self, rules=[]):
         self.rules = rules
+        self.cond_count = 0
 
     def __str__(self):
         ruleset_str = str([str(rule) for rule in self.rules]).replace(',','v').replace("'","").replace(' ','')
@@ -133,6 +130,9 @@ class Ruleset:
             #if display:print(f'Ruleset is {self}')
             #if display:print()
 
+        # Count cond complexity
+        self.cond_count = sum([len(rule.conds) for rule in self.rules])
+
     def grow_pruned(self, pos_df, neg_df, prune_size=.33, seed=None, display=False):
         """ Grow a Ruleset with pruning. """
 
@@ -158,8 +158,11 @@ class Ruleset:
                 neg_remaining.drop(pruned_rule.covers(neg_remaining).index, axis=0, inplace=True)
                 #if display: print("Updated ruleset:",self,'\n')
 
+        # Count cond complexity
+        self.cond_count = sum([len(rule.conds) for rule in self.rules])
+
 class Rule:
-    """ Class implementing a conjunction of Conds. """
+    """ Class implementing conjunctions of Conds. """
 
     def __init__(self, conds=[]):
         self.conds = conds
