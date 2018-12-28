@@ -79,9 +79,9 @@ class RIPPER:
         neg_remaining = neg_df.copy()
         ruleset = Ruleset()
         ruleset_dl = None
-        smallest_dl = None
+        mdl = None      # Minimum description length (in bits)
 
-        while (len(pos_remaining) > 0) and (ruleset_dl is None or (ruleset_dl - smallest_dl) <= self.dl_allowance):
+        while (len(pos_remaining) > 0) and (ruleset_dl is None or (ruleset_dl - mdl) <= self.dl_allowance):
             pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, prune_size, seed=seed)
             neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, prune_size, seed=seed)
 
@@ -101,10 +101,10 @@ class RIPPER:
             ruleset.add(pruned_rule) # "*After* each rule is added, the total description length of the rule set and examples is computed."
             if ruleset_dl is None:   # First Rule to be added
                 ruleset_dl = total_bits(pruned_rule, pos_remaining, neg_remaining)
-                smallest_dl = ruleset_dl
+                mdl = ruleset_dl
             else:
                 ruleset_dl += total_bits(pruned_rule, pos_remaining, neg_remaining)
-                smallest_dl = ruleset_dl if ruleset_dl<smallest_dl else smallest_dl
+                mdl = ruleset_dl if ruleset_dl<mdl else mdl
 
             # Update dataset
             pos_remaining.drop(pruned_rule.covers(pos_remaining).index, axis=0, inplace=True)
@@ -112,7 +112,7 @@ class RIPPER:
 
             if verbose:
                 print(f'examples remaining: {len(pos_remaining)} pos, {len(neg_remaining)} neg')
-                print(f'smallest_dl {round(smallest_dl,2)}')
+                print(f'mdl {round(mdl,2)}')
                 print()
         return ruleset
 
