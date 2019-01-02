@@ -4,26 +4,57 @@ import math
 import operator as op
 from functools import reduce
 import copy
+import warnings
+
+import time
+class Timer:
+    """ Simple, fun class for keeping track of how long something has been taking """
+
+    def __init__(self):
+        self.start = time.time()
+
+    def buzz(self, reset=True):
+        last_buzz = self.start
+        now = time.time()
+        if reset:
+            self.start = now
+        return(str(int(now-last_buzz)))
 
 class Ruleset:
     """ Base IREP model.
         Implements collection of Rules in disjunctive normal form.
     """
 
-    def __init__(self, rules=[]):
-        self.rules = rules
+    def __init__(self, rules=None):
+        if rules is None:
+            self.rules = []
+        else:
+            self.rules = rules
         self.cond_count = 0
 
-    def __str__(self):
-        ruleset_str = str([str(rule) for rule in self.rules]).replace(',','v').replace("'","").replace(' ','')
-        return ruleset_str
+    def __str__(self, spacing=False):
+        #return str([str(rule) for rule in self.rules]).replace(',','v').replace("'","").replace(' ','')
+        return ' V '.join([str(rule) for rule in self.rules])
 
     def __repr__(self):
-        ruleset_str = str([str(rule) for rule in self.rules]).replace(',','v').replace("'","").replace(' ','')
+        ruleset_str = self.__str__()
         return f'<Ruleset object: {ruleset_str}>'
 
+    def __eq__(self, other):
+        if type(other)!=Rule:
+            raise TypeError(f'{self} __eq__ {other}: a Ruleset can only be compared with another Ruleset')
+        for r in self.rules:
+            if r not in other.rules: return False
+        for r in other.rules: # Check the other way around too. (Can't compare lengths instead b/c there might be duplicate rules.)
+            if r not in self.rules: return False
+        return True
+
+    def out_pretty(self):
+        ruleset_str = str([str(rule) for rule in self.rules]).replace(',','v\n').replace("'","").replace(' ','')
+        print(ruleset_str)
+
     def covers(self, df):
-        """ Returns instances covered by the Ruleset (i.e. those which are not in contradiction with it). """
+        """ Returns instances covered by the Ruleset. """
 
         if not self.rules:
             return df
@@ -31,6 +62,7 @@ class Ruleset:
             covered = self.rules[0].covers(df).copy()
             for rule in self.rules[1:]:
                 covered = covered.append(rule.covers(df))
+            covered = covered.drop_duplicates()
             return covered
 
     def num_covered(self, df):
@@ -42,11 +74,25 @@ class Ruleset:
     def count_conds(self):
         return sum([len(r.conds) for r in self.rules])
 
+    def _set_possible_conds(self, pos_df, neg_df):
+        """ Stores a list of all possible conds.
+
+            (Used in Rule::successors so as not to rebuild it each time,
+             and in exceptions_dl calculations because nCr portion of formula already accounts for no replacement.)
+        """
+        self.possible_conds = []
+        for feat in pos_df.columns.values:
+            for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())):
+                self.possible_conds.append(Cond(feat, val))
+
 class Rule:
     """ Class implementing conjunctions of Conds """
 
-    def __init__(self, conds=[]):
-        self.conds = conds
+    def __init__(self, conds=None):
+        if conds is None:
+            self.conds = []
+        else:
+            self.conds = conds
 
     def __str__(self):
         rule_str = str([str(cond) for cond in self.conds]).replace(',','^').replace("'","").replace(' ','')
@@ -62,12 +108,17 @@ class Rule:
         else:
             raise TypeError(f'{self} + {cond}: Rule objects can only conjoin Cond objects.')
 
+    def __eq__(self, other):
+        if type(other)!=Rule:
+            raise TypeError(f'{self} __eq__ {other}: a Rule can only be compared with another rule')
+        if len(self.conds)!=len(other.conds): return False
+        return set([str(cond) for cond in self.conds]) == set([str(cond) for cond in other.conds])
+
     def isempty(self):
         return len(self.conds)==0
 
     def covers(self, df):
-        """ Returns instances covered by the Rule (i.e. those which are not in contradiction with it). """
-
+        """ Returns instances covered by the Rule. """
         covered = df.copy()
         for cond in self.conds:
             covered = cond.covers(covered)
@@ -84,15 +135,25 @@ class Rule:
     ##### Rule::grow/prune helper functions #####
     #############################################
 
-    def successors(self, pos_df, neg_df):
-        """ Returns a list of all valid successor rules. """
+    def successors(self, possible_conds, pos_df, neg_df):
+        """ Returns a list of all valid successor rules.
 
-        successor_rules = []
-        for feat in pos_df.columns.values:
-            for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())): # Could optimize by calculating this once during fit and passing it along
-                if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors
-                    successor_rules.append(self+Cond(feat, val))
-        return successor_rules
+        possible_conds: list of Conds to consider conjoining to create successors.
+                        passing None defaults to create this param from pos_df and neg_df --
+                        however, if pos_df and neg_df are data subsets, it will only generate possible_conds
+                        from their available values.
+        """
+
+        if possible_conds is not None:
+            successor_conds = [cond for cond in possible_conds if cond not in self.conds]
+            return [Rule(self.conds+[cond]) for cond in successor_conds]
+        else:
+            successor_rules = []
+            for feat in pos_df.columns.values:
+                for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())): # Could optimize by calculating this once during fit and passing it along
+                    if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors
+                        successor_rules.append(self+Cond(feat, val))
+            return successor_rules
 
 class Cond:
     """ Class implementing conditional. """
@@ -121,41 +182,90 @@ class Cond:
 ##### BASE FUNCTIONS #####
 ##########################
 
-def grow_rule(pos_df, neg_df):
+def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), verbosity=0):
     """ Fit a new rule to add to a ruleset """
-    rule0 = Rule()
-    rule1 = Rule()
+    # Possible optimization: remove data after each added cond?
+
+    rule0 = copy.deepcopy(initial_rule)
+    if verbosity>=4:
+        print('growing rule')
+        print(rule0)
+    rule1 = copy.deepcopy(rule0)
     while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
-        rule1 = best_successor(rule0, pos_df, neg_df)
+        rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
         #print(f'growing rule... {rule1}')
         if rule1 is not None:
             rule0 = rule1
+            if verbosity>=4:
+                print(f'negs remaining {len(rule0.covers(neg_df))}')
 
-    if rule0.isempty():
-        return None
+    if not rule0.isempty():
+        return rule0
     else:
+        warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
         return rule0
 
-def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset):
-    """ Returns a pruned version of the Rule by removing Conds """
+def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_ruleset=None, verbosity=0):
+    """ Returns a pruned version of the Rule by removing Conds
 
-    # Currently-best pruned rule and its prune value
-    best_rule = copy.deepcopy(rule)
-    best_v = 0
+        rule: Rule to prune
+        prune_metric: function that returns value to maximize
+        pos_pruneset: df of positive class examples
+        neg_pruneset: df of non-positive class examples
 
-    # Iterative test rule
-    current_rule = copy.deepcopy(rule)
+        eval_index_on_ruleset (optional): tuple(rule_index, ruleset)
+            pass the rest of the Rule's Ruleset (excluding the Rule in question),
+            in order to prune the rule based on the performance of its entire Ruleset,
+            rather than on the rule alone. For use during optimization stage.
+    """
 
-    while current_rule.conds:
-        v = prune_metric(current_rule, pos_pruneset, neg_pruneset)
-        if v is None:
-            return None
-        if v > best_v:
-            best_v = v
-            best_rule = copy.deepcopy(current_rule)
-        current_rule.conds.pop(-1)
-    return best_rule
+    if rule.isempty():
+        warnings.warn(f"can't prune empty rule {rule}", RuntimeWarning)#, stacklevel=1, source=None)
+        return rule
 
+    if not eval_index_on_ruleset:
+        # Currently-best pruned rule and its prune value
+        best_rule = copy.deepcopy(rule)
+        best_v = 0
+
+        # Iterative test rule
+        current_rule = copy.deepcopy(rule)
+
+        while current_rule.conds:
+            v = prune_metric(current_rule, pos_pruneset, neg_pruneset)
+            if verbosity>=5: print(f'prune value of {current_rule}: {rnd(v)}')
+            if v is None:
+                return None
+            if v >= best_v:
+                best_v = v
+                best_rule = copy.deepcopy(current_rule)
+            current_rule.conds.pop(-1)
+        return best_rule
+
+    else:
+        # Check if index matches rule to prune
+        rule_index, ruleset = eval_index_on_ruleset
+        if ruleset.rules[rule_index] != rule:
+            raise ValueError(f'rule mismatch: {rule} - {ruleset.rules[rule_index]} in {ruleset}')
+
+        current_ruleset = copy.deepcopy(ruleset)
+        current_rule = current_ruleset.rules[rule_index]
+        best_ruleset = copy.deepcopy(current_ruleset)
+        best_v = 0
+
+        # Iteratively prune and test rule over ruleset
+        while current_rule.conds:
+            v = prune_metric(current_ruleset, pos_pruneset, neg_pruneset)
+            if verbosity>=5: print(f'prune value of {current_rule}: {rnd(v)}')
+            if v is None:
+                return None
+            if v >= best_v:
+                best_v = v
+                best_rule = copy.deepcopy(current_rule)
+                best_ruleset = copy.deepcopy(current_ruleset)
+            current_rule.conds.pop(-1)
+            current_ruleset.rules[rule_index] = current_rule
+        return best_rule
 
     ###################
     ##### METRICS #####
@@ -183,25 +293,45 @@ def precision(object, pos_df, neg_df):
     else:
         return len(pos_covered) / total_n_covered
 
-def best_successor(rule, pos_df, neg_df, eval_with_ruleset=None):
+def accuracy(object, pos_pruneset, neg_pruneset):
+    """ Returns accuracy value of object's classification.
+        object: Cond, Rule, or Ruleset
+    """
+    P = len(pos_pruneset)
+    N = len(neg_pruneset)
+    if P + N == 0:
+        return None
+
+    tp = len(object.covers(pos_pruneset))
+    tn = N - len(object.covers(neg_pruneset))
+    return (tp + tn) / (P + N)
+
+def best_successor(rule, possible_conds, pos_df, neg_df, eval_on_ruleset=None, verbosity=0):
     """ Returns for a Rule its best successor Rule according to FOIL information gain metric.
 
-        eval_with_ruleset: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
+        eval_on_ruleset: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
     """
-    # Optimization todo: don't need to look up coverage each time for all the other rules
 
-    if not eval_with_ruleset:
+    #if not eval_on_ruleset:
+
+    # If the current rule is empty, require a successor -- even if its gain is negative
+    if not rule.isempty():
         best_gain = 0
-        best_successor_rule = None
-        for successor in rule.successors(pos_df, neg_df):
-            g = gain(rule, successor, pos_df, neg_df)
-            if g > best_gain:
-                best_gain = g
-                best_successor_rule = successor
-        return best_successor_rule
-
     else:
-        current_ruleset = copy.deepcopy(eval_with_ruleset)
+        best_gain = float('-inf')
+
+    # Find best successor rule
+    best_successor_rule = None
+    for successor in rule.successors(possible_conds, pos_df, neg_df):
+        g = gain(rule, successor, pos_df, neg_df)
+        if g > best_gain:
+            best_gain = g
+            best_successor_rule = successor
+    if verbosity>=5: print(f'gain {rnd(best_gain)} {best_successor_rule}')
+    return best_successor_rule
+    """
+    else:
+        current_ruleset = copy.deepcopy(eval_on_ruleset)
         current_ruleset.add(rule)
 
         best_ruleset = copy.deepcopy(current_ruleset)
@@ -217,7 +347,7 @@ def best_successor(rule, pos_df, neg_df, eval_with_ruleset=None):
                 best_ruleset.rules[-1] = copy.deepcopy(current_ruleset.rules[-1])
         print(f'best successor: {best_ruleset.rules[-1]}')
         return best_ruleset.rules[-1]
-
+        """
 def give_reasons(irep_, df):
     """ Experimental """
     def pos_reasons(example):
@@ -277,4 +407,64 @@ def nCr(n, r):
 
     num = product(range(n, n-r, -1))
     den = product(range(1, r+1))
-    return num/den
+    return num//den
+
+def rnd(float, places='default'):
+    """ places: number of decimal places to round.
+                set to 'default': defaults to 1 decimal place if float < 100, otherwise defaults to 0 places
+    """
+    if places=='default':
+        if float<1:
+            places = 2
+        elif float<100:
+            places = 1
+        else:
+            places = 0
+    rounded = round(float, places)
+    if rounded!=int(rounded):
+        return rounded
+    else:
+        return int(rounded)
+
+def argmin(list_):
+    """ Returns index of minimum value. """
+    lowest_val = list_[0]
+    lowest_i = 0
+    for i, val in enumerate(list_):
+        if val < lowest_val:
+            lowest_val = val
+            lowest_i = i
+    return lowest_i
+
+def i_replaced(list_, i, value):
+    """ Returns a new list with element i replaced by value.
+        Pass None to value to return list with element i removed.
+    """
+    if value is not None:
+        return list_[:i]+[value]+list_[i+1:]
+    else:
+        return list_[:i]+list_[i+1:]
+
+def rm_covered(object, pos_df, neg_df):
+    """ Return pos and neg dfs of examples that are not covered by object """
+    return (pos_df.drop(object.covers(pos_df).index, axis=0, inplace=False),\
+            neg_df.drop(object.covers(neg_df).index, axis=0, inplace=False))
+
+
+"""
+def ensure_samples(df_list, min=1, tries=30):
+    i = 0
+    isvalid = True
+    for df in df_list:
+        if len(df)<min:
+            isvalid=False
+            break
+
+    while (len(pos_growset)==0 or len(neg_growset)==0 or len(pos_pruneset)==0 or len(neg_pruneset)==0):
+        newseed = seed+1 if seed is not None else None
+        pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, prune_size, seed=newseed)
+        neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, prune_size, seed=newseed)
+        if tries>20:
+            raise ValueError(f'Difficulty generating reasonable samples pos_growset {len(pos_growset)} neg_growset {len(neg_growset)}
+                               pos_pruneset {len(pos_pruneset)} neg_pruneset {len(neg_pruneset)}}')
+"""
