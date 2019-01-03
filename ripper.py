@@ -10,10 +10,11 @@ See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 import pandas as pd
 import copy
 import math
+import warnings
 
 import base
 from base import Ruleset, Rule, Cond
-from base import rnd
+from base import rnd, fit_bins, bin_transform
 
 class RIPPER:
     """ Class for generating ruleset classification models. """
@@ -45,10 +46,11 @@ class RIPPER:
         return f'<IREP object {fitstr}>'
     __repr__ = __str__
 
-    def fit(self, df, seed=None):
+    def fit(self, df, n_discretize_bins=None, seed=None):
         """ Fit an IREP to data by growing a classification Ruleset in disjunctive normal form.
             class_feat: name of DataFrame class feature
 
+            n_discretize_bins (optional): try to fit apparent numeric attributes into n_discretize_bins discrete bins.
             seed: (optional) random state for grow/prune split (if pruning)
         """
 
@@ -56,8 +58,25 @@ class RIPPER:
         if not self.pos_class:
             self.pos_class = df.iloc[0][class_feat]
 
+        # Anything to discretize?
+        numeric_feats = base.find_numeric_feats(df, min_unique=n_discretize_bins, ignore_feats=[self.class_feat])
+        if numeric_feats:
+            if n_discretize_bins is not None:
+                if self.verbosity==1:
+                    print(f'binning data...\n')
+                elif self.verbosity>=2:
+                    print(f'binning features {numeric_feats}...')
+                self.bin_transformer_ = fit_bins(df, n_bins=n_discretize_bins, output=False, ignore_feats=[self.class_feat], verbosity=self.verbosity)
+                #print(f'bin transformer {bin_transformer}')
+                binned_df = bin_transform(df, self.bin_transformer_)
+            else:
+                n_unique_values = sum([len(u) for u in [df[f].unique() for f in numeric_feats]])
+                warnings.warn(f'Optional param n_discretize_bins=None, but there are apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal', RuntimeWarning)
+                binned_df=None
+        else:
+            binned_df=None
         # Split df into pos, neg classes
-        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class)
+        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class) if binned_df is None else base.pos_neg_split(binned_df, self.class_feat, self.pos_class)
         pos_df = pos_df.drop(self.class_feat,axis=1)
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
@@ -83,7 +102,7 @@ class RIPPER:
             if self.verbosity>=1:
                 print()
                 print('OPTIMIZED RULESET:')
-                if self.verbosity>=2: print(f'iteration {iter+1} of {self.k} modified rules {[i for i in range(len(self.ruleset_.rules)) if self.ruleset_.rules[i]!= newset.rules[i]]}')
+                if self.verbosity>=2: print(f'iteration {iter+1} of {self.k}\n modified rules {[i for i in range(len(self.ruleset_.rules)) if self.ruleset_.rules[i]!= newset.rules[i]]}')
                 newset.out_pretty()
                 print()
             self.ruleset_ = newset
@@ -96,28 +115,26 @@ class RIPPER:
         if len(pos_remaining)>=1:
             if self.verbosity>=2:
                 print(f'{len(pos_remaining)} pos left. Growing final rules...')
-            self.ruleset_ = self.grow_ruleset(pos_df, neg_df, initial_ruleset=self.ruleset_,
+            newset = self.grow_ruleset(pos_df, neg_df, initial_ruleset=self.ruleset_,
                 prune_size=self.prune_size, dl_allowance=self.dl_allowance,
                 seed=seed)
             if self.verbosity>=1:
                 print('GREW FINAL RULES')
                 newset.out_pretty()
                 print()
+            self.ruleset_ = newset
         else:
             if self.verbosity>=1: print('All pos covered\n')
 
         # Remove any rules that don't improve dl
         if self.verbosity>=2: print('Optimizing dl...')
-        mdl_subset, mdl = rs_total_bits(self.ruleset_, self.ruleset_.possible_conds, pos_df, neg_df,
+        mdl_subset, _ = rs_total_bits(self.ruleset_, self.ruleset_.possible_conds, pos_df, neg_df,
                                         bestsubset_dl=True, ret_bestsubset=True, verbosity=self.verbosity)
         self.ruleset_ = mdl_subset
         if self.verbosity>=1:
             print('FINAL RULESET:')
             self.ruleset_.out_pretty()
             print()
-
-
-
 
     def predict(self, X):
         """ Predict classes of X """
@@ -151,15 +168,16 @@ class RIPPER:
 
         ruleset_dl = None
         mdl = None      # Minimum encountered description length (in bits)
-
+        dl_diff = 0
         if self.verbosity>=2:
             print('growing ruleset...')
             print()
-        while (len(pos_remaining) > 0) and (ruleset_dl is None or (ruleset_dl - mdl) <= self.dl_allowance):
+        while len(pos_remaining) > 0 and dl_diff <= self.dl_allowance:
             pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, prune_size, seed=seed)
             neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, prune_size, seed=seed)
             print(f'pos_growset {len(pos_growset)} pos_pruneset {len(pos_pruneset)}')
             print(f'neg_growset {len(neg_growset)} neg_pruneset {len(neg_pruneset)}')
+            if len(pos_growset)==0: break
             #pos_growset, pos_pruneset, neg_growset, neg_pruneset = base.ensure_samples([pos_growset, pos_pruneset, neg_growset, neg_pruneset], min=1, tries=20)
             # Check to make sure at least one example of each type
 
@@ -171,18 +189,11 @@ class RIPPER:
 
             # Prune Rule
             pruned_rule = base.prune_rule(grown_rule, growphase_prune_metric, pos_pruneset, neg_pruneset, verbosity=self.verbosity)
-            if self.verbosity>=3:
-                if len(pruned_rule.conds)==len(grown_rule.conds):
-                    print(f'no pruning')
-                else:
-                    print(f'pruned rule: {pruned_rule}')
-            elif self.verbosity==2:
-                print(f'new rule: {pruned_rule}')
 
             # Add rule; calculate new description length
             ruleset.add(pruned_rule) # Unlike IREP, IREP*/RIPPER stopping condition is inclusive: "After each rule is added, the total description length of the rule set and examples is computed."
             if self.verbosity>=2:
-                print(f'updated ruleset: {ruleset}')
+                print(f"updated ruleset: {ruleset.truncstr(direction='right')}")
                 print()
 
             if ruleset_dl is None:   # First Rule to be added
@@ -196,16 +207,19 @@ class RIPPER:
                 theory_dl += rule_dl
                 data_dl = exceptions_bits(ruleset, pos_df, neg_df, verbosity=self.verbosity)
                 ruleset_dl = theory_dl + data_dl
-                mdl = ruleset_dl if ruleset_dl<mdl else mdl
+                dl_diff = ruleset_dl - mdl
 
             if self.verbosity>=3:
                 print(f'rule dl: {rnd(rule_dl)}')
                 print(f'updated theory dl: {rnd(theory_dl)}')
                 print(f'exceptions: {rnd(data_dl)}')
                 print(f'total dl: {rnd(ruleset_dl)}')
-                diff = mdl - ruleset_dl
-                if diff<=self.dl_allowance: print(f'mdl {rnd(mdl)} (diff {rnd(ruleset_dl - mdl)} <= {rnd(self.dl_allowance)})')
-                else: print(f'mdl {rnd(mdl)} dl-halt: diff {rnd(ruleset_dl - mdl)} exceeds allowance ({rnd(self.dl_allowance)})')
+                if dl_diff<=self.dl_allowance:
+                    print(f'mdl {rnd(mdl)} (diff {rnd(dl_diff)} <= {rnd(self.dl_allowance)})')
+                else:
+                    print(f'mdl {rnd(mdl)} dl-halt: diff {rnd(dl_diff)} exceeds allowance ({rnd(self.dl_allowance)})')
+
+            mdl = ruleset_dl if ruleset_dl<mdl else mdl
 
             # Remove covered examples
             pos_remaining, neg_remaining = base.rm_covered(pruned_rule, pos_remaining, neg_remaining)
@@ -229,15 +243,15 @@ class RIPPER:
             print(f'original ruleset potential dl: {rnd(original_dl)}')
             print()
         new_ruleset = copy.deepcopy(ruleset)
+        #new_ruleset = original_ruleset.copy(0)
 
         for i, rule in enumerate(original_ruleset.rules):
             pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, prune_size, seed=seed)
             neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, prune_size, seed=seed)
+
             #disjs = Ruleset(base.i_replaced(ruleset.rules, i, None))  # the Ruleset without the current rule
 
             # Create alternative rules
-            #if self.verbosity>=2: print(f'rule {i} {ruleset.rules[i]} alternatives:')
-
             if self.verbosity>=4: print(f'creating replacement for {i} {ruleset.rules[i]}')
             g_replacement = base.grow_rule(pos_growset, neg_growset, original_ruleset.possible_conds, initial_rule=Rule(), verbosity=self.verbosity)
             replacement_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, g_replacement))
@@ -257,38 +271,43 @@ class RIPPER:
                 print(f'pruned revision is {pr_replacement}')
                 print()
 
-            # Calculate alternative Rulesets' respective lowest potential dls to identify the best alternative Rule
+            # Calculate alternative Rulesets' respective lowest potential dls to identify the best version
             if self.verbosity>=3: print(f'calculate potential dl for ds with replacement {pr_replacement}')
-            #replacement_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, pr_replacement))
-            replacement_dl = rs_total_bits(replacement_ruleset, original_ruleset.possible_conds, pos_df, neg_df, bestsubset_dl=True, verbosity=self.verbosity)
-
+            replacement_dl = rs_total_bits(replacement_ruleset, original_ruleset.possible_conds, pos_df, neg_df, bestsubset_dl=True, verbosity=self.verbosity)\
+                             if pr_replacement!=rule else original_dl
             if self.verbosity>=3: print(f'calculate potential dl for ds with revision {pr_revision}')
-            #revision_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, pr_revision))
-            revision_dl = rs_total_bits(revision_ruleset, original_ruleset.possible_conds, pos_df, neg_df, bestsubset_dl=True, verbosity=self.verbosity)
-            best_rule = [pr_replacement, pr_revision, rule][base.argmin([replacement_dl, revision_dl, original_dl])]
+            revision_dl = rs_total_bits(revision_ruleset, original_ruleset.possible_conds, pos_df, neg_df, bestsubset_dl=True, verbosity=self.verbosity)\
+                          if pr_revision!=rule else original_dl
+            best_rule = [rule, pr_replacement, pr_revision][base.argmin([original_dl, replacement_dl, revision_dl])]
 
             if self.verbosity>=2:
+                print(f'\nrule {i+1} of {len(original_ruleset.rules)}')
                 rep_str = pr_replacement.__str__() if pr_replacement!=rule else 'unchanged'
                 rev_str = pr_revision.__str__() if pr_revision!=rule else 'unchanged'
+                best_str = best_rule.__str__() if best_rule!=rule else 'unchanged'
                 if self.verbosity==2:
+                    print(f'original: {rule}')
                     print(f'replacement: {rep_str}')
                     print(f'revision: {rev_str}')
-                    print(f'original: {rule}')
-                    print(f'*best: {best_rule}')
+                    print(f'*best: {best_str}')
                     print()
                 else:
+                    print(f'original: {rule}) | {rnd(original_dl)} bits')
                     print(f'replacement: {rep_str} | {rnd(replacement_dl)} bits')
                     print(f'revision: {rev_str} | {rnd(revision_dl)} bits')
-                    print(f'original: {rule}) | {rnd(original_dl)} bits')
-                    print(f'*best: {best_rule} | {rnd(min([replacement_dl, revision_dl, original_dl]))} bits')
+                    print(f'*best: {best_str} | {rnd(min([replacement_dl, revision_dl, original_dl]))} bits')
                     print()
             new_ruleset.rules[i] = best_rule
+            #new_ruleset.add(best_rule)
 
             # Remove covered examples
-            pos_remaining, neg_remaining = base.rm_covered(best_rule, pos_remaining, neg_remaining)
+            pos_remaining, neg_remaining = base.rm_covered(rule, pos_remaining, neg_remaining)
             if self.verbosity>=3:
                 print(f'examples remaining: {len(pos_remaining)} pos, {len(neg_remaining)} neg')
                 print()
+
+            # If there are no pos data remaining to train optimization (possible where optimization run >1), keep remaining rules the same
+            if len(pos_remaining)==0: break
 
         return new_ruleset
 
@@ -347,7 +366,7 @@ def exceptions_bits(ruleset, pos_df, neg_df, verbosity=0):
     fp = ruleset.num_covered(neg_df)                           # Number false positives = negatives covered by the ruleset
     fn = len(pos_df) - ruleset.num_covered(pos_df)             # Number false negatives = positives not covered by the ruleset
     exceptions_dl = math.log2(base.nCr(p,fp)) + math.log2(base.nCr((N-p),fn))
-    if verbosity>=5: print(f'exceptions_bits| {ruleset}: \n N {N} p {p} fp {fp} fn {fn}: exceptions_bits {rnd(exceptions_dl)}')
+    if verbosity>=5: print(f'exceptions_bits| {ruleset.truncstr()}: \n N {N} p {p} fp {fp} fn {fn}: exceptions_bits {rnd(exceptions_dl)}')
 
     return exceptions_dl
 

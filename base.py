@@ -5,6 +5,7 @@ import operator as op
 from functools import reduce
 import copy
 import warnings
+from numpy import var, mean
 
 import time
 class Timer:
@@ -40,6 +41,15 @@ class Ruleset:
         ruleset_str = self.__str__()
         return f'<Ruleset object: {ruleset_str}>'
 
+    def truncstr(self, limit=100, direction='left'):
+        string = self.__str__()
+        if len(string)>=limit:
+            if direction=='left':
+                string=string[:limit]+'...'
+            elif direction=='right':
+                string='...'+string[-limit:]
+        return string
+
     def __eq__(self, other):
         if type(other)!=Rule:
             raise TypeError(f'{self} __eq__ {other}: a Ruleset can only be compared with another Ruleset')
@@ -50,8 +60,18 @@ class Ruleset:
         return True
 
     def out_pretty(self):
-        ruleset_str = str([str(rule) for rule in self.rules]).replace(',','v\n').replace("'","").replace(' ','')
+        ruleset_str = str([str(rule) for rule in self.rules]).replace(' ','').replace(',',' V\n').replace("'","")
         print(ruleset_str)
+
+    def copy(self, n_rules_limit=None):
+        """ Returns a deep copy of self.
+
+            n_rules_limit (optional): keep only this many rules from the original.
+        """
+        result = copy.deepcopy(self)
+        if n_rules_limit is not None:
+            result.rules = result.rules[:n_rules_limit]
+        return result
 
     def covers(self, df):
         """ Returns instances covered by the Ruleset. """
@@ -240,6 +260,12 @@ def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_rul
                 best_v = v
                 best_rule = copy.deepcopy(current_rule)
             current_rule.conds.pop(-1)
+
+        if verbosity>=2:
+            if len(best_rule.conds)!=len(rule.conds):
+                print(f'pruned rule: {best_rule}')
+            else:
+                print(f'pruned rule unchanged')
         return best_rule
 
     else:
@@ -315,10 +341,11 @@ def best_successor(rule, possible_conds, pos_df, neg_df, eval_on_ruleset=None, v
     #if not eval_on_ruleset:
 
     # If the current rule is empty, require a successor -- even if its gain is negative
-    if not rule.isempty():
-        best_gain = 0
-    else:
-        best_gain = float('-inf')
+#    if not rule.isempty():
+#        best_gain = 0
+#    else:
+#        best_gain = float('-inf')
+    best_gain = 0
 
     # Find best successor rule
     best_successor_rule = None
@@ -373,7 +400,7 @@ def df_shuffled_split(df, split_size, seed=None):
         split_size: proportion of rows to include in tuple[0]
     """
     df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
-    split_at = int(len(df)*split_size)
+    split_at = int(len(df)*(1-split_size))
     return (df[:split_at], df[split_at:])
 
 def pos(df, class_feat, pos_class):
@@ -449,6 +476,114 @@ def rm_covered(object, pos_df, neg_df):
     """ Return pos and neg dfs of examples that are not covered by object """
     return (pos_df.drop(object.covers(pos_df).index, axis=0, inplace=False),\
             neg_df.drop(object.covers(neg_df).index, axis=0, inplace=False))
+
+########################################
+##### BONUS: FUNCTIONS FOR BINNING #####
+########################################
+
+def find_numeric_feats(df, min_unique=10, ignore_feats=[]):
+    """ Returns df features that seem to be numeric """
+    feats = df.dtypes[(df.dtypes=='float64') | (df.dtypes=='int64')].index.tolist()
+    feats = [f for f in feats if f not in ignore_feats]
+    feats = [f for f in feats if len(df[f].unique())>min_unique]
+    return feats
+
+def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
+    """
+    Returns a dict definings fits for numerical features
+    A fit is an ordered list of tuples defining each bin's range
+
+    Returned dict allows for fitting to training data and applying the same fit to test data
+    to avoid information leak.
+    """
+
+    def bin_fit_feat(df, feat, n_bins=10):
+        """
+        Returns list of tuples defining bin ranges for a numerical feature
+        """
+        n_bins = min(n_bins, len(df[feat].unique())) # In case there are fewer unique values than n_bins
+        bin_size = len(df)//n_bins
+        sorted_df = df.sort_values(by=[feat])
+        sorted_values = sorted_df[feat].tolist()
+
+        if verbosity>=4: print (f'{feat}: fitting {len(df[feat].unique())} unique vals in {n_bins} bins')
+        bin_ranges = []
+        finish_i=-1
+        sizes=[]
+        for bin_i in range(0,n_bins):
+            #print(f'bin {bin_i} of {range(n_bins)}')
+            start_i = bin_size*(bin_i)
+            finish_i = bin_size*(bin_i+1) if bin_i<n_bins-1 else len(sorted_df)-1
+            while finish_i<len(sorted_df)-1 and finish_i!=0 and \
+                    sorted_df.iloc[finish_i][feat]==sorted_df.iloc[finish_i-1][feat]: # ensure next bin begins on a new value
+                finish_i+=1
+                #print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
+            sizes.append(finish_i-start_i)
+            #print(f'bin_i {bin_i}, start_i {start_i} {sorted_df.iloc[start_i][feat]}, finish_i {finish_i} {sorted_df.iloc[finish_i][feat]}')
+            start_val = sorted_values[start_i]
+            finish_val = sorted_values[finish_i]
+            bin_range = (start_val, finish_val)
+            bin_ranges.append(bin_range)
+        if verbosity>=5: print(f'-bin sizes {sizes}; dataVMR={rnd(var(df[feat])/mean(df[feat]))}, binVMR={rnd(var(sizes)/mean(sizes))}')#, axis=None, dtype=None, out=None, ddof=0)})
+        return bin_ranges
+
+    # Create dict to store fit definitions for each feature
+    fit_dict = {}
+    feats_to_fit = find_numeric_feats(df,ignore_feats=ignore_feats)
+    if verbosity==2: print(f'fitting bins for features {feats_to_fit}')
+    if verbosity>=2:
+        print()
+
+    # Collect fits in dict
+    count=1
+    for feat in feats_to_fit:
+        fit = bin_fit_feat(df, feat, n_bins=n_bins)
+        fit_dict[feat] = fit
+    return fit_dict
+
+def bin_transform(df, fit_dict, names_precision=2):
+    """
+    Uses a pre-collected dictionary of fits to transform df features into bins
+    """
+
+    def bin_transform_feat(df, feat, bin_fits, names_precision=names_precision):
+        """
+        Returns new dataframe with n_bin bins replacing each numerical feature
+        """
+
+        def renamed(bin_fit_list, value, names_precision=names_precision):
+            """
+            Returns bin string name for a given numberical value
+            Assumes bin_fit_list is ordered
+            """
+            min = bin_fit_list[0][0]
+            max = bin_fit_list[-1][1]
+            for bin_fit in bin_fits:
+                if value <= bin_fit[1]:
+                    start_name = str(round(bin_fit[0], names_precision))
+                    finish_name = str(round(bin_fit[1], names_precision))
+                    bin_name = '-'.join([start_name, finish_name])
+                    return bin_name
+            if value < min:
+                return min
+            elif value > max:
+                return max
+            else:
+                raise ValueError('No bin found for value', value)
+
+        renamed_values = []
+        for value in df[feat]:
+            bin_name = renamed(bin_fits, value, names_precision)
+            renamed_values.append(bin_name)
+
+        return renamed_values
+
+    # Replace each feature with bin transformations
+    for feat, bin_fits in fit_dict.items():
+        feat_transformation = bin_transform_feat(df, feat, bin_fits, names_precision=names_precision)
+        df[feat] = feat_transformation
+    return df
+
 
 
 """
