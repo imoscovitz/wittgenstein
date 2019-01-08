@@ -6,23 +6,11 @@ from functools import reduce
 import copy
 import warnings
 from numpy import var, mean
-
 import time
-class Timer:
-    """ Simple, fun class for keeping track of how long something has been taking """
-
-    def __init__(self):
-        self.start = time.time()
-
-    def buzz(self, reset=True):
-        last_buzz = self.start
-        now = time.time()
-        if reset:
-            self.start = now
-        return(str(int(now-last_buzz)))
+#from numba import jit
 
 class Ruleset:
-    """ Base IREP model.
+    """ Base Ruleset model.
         Implements collection of Rules in disjunctive normal form.
     """
 
@@ -33,22 +21,28 @@ class Ruleset:
             self.rules = rules
         self.cond_count = 0
 
-    def __str__(self, spacing=False):
-        #return str([str(rule) for rule in self.rules]).replace(',','v').replace("'","").replace(' ','')
+    def __str__(self):
         return ' V '.join([str(rule) for rule in self.rules])
 
     def __repr__(self):
         ruleset_str = self.__str__()
         return f'<Ruleset object: {ruleset_str}>'
 
-    def truncstr(self, limit=100, direction='left'):
-        string = self.__str__()
-        if len(string)>=limit:
+    def truncstr(self, limit=2, direction='left'):
+        """ Return Ruleset string representation limited to a specified number of rules.
+
+            limit: how many rules to return
+            direction: which part to return. (valid options: 'left', 'right')
+        """
+        if len(self.rules)>=limit:
             if direction=='left':
-                string=string[:limit]+'...'
+                return Ruleset(self.rules[:limit]).__str__()+'...'
             elif direction=='right':
-                string='...'+string[-limit:]
-        return string
+                return '...'+Ruleset(self.rules[-limit:]).__str__()
+            else:
+                raise ValueError('direction param must be "left" or "right"')
+        else:
+            return self.__str__()
 
     def __eq__(self, other):
         if type(other)!=Rule:
@@ -60,6 +54,7 @@ class Ruleset:
         return True
 
     def out_pretty(self):
+        """ Prints Ruleset line-by-line. """
         ruleset_str = str([str(rule) for rule in self.rules]).replace(' ','').replace(',',' V\n').replace("'","")
         print(ruleset_str)
 
@@ -151,6 +146,32 @@ class Rule:
         """ Returns list of features covered by the Rule """
         return [cond.feature for cond in self.conds]
 
+    def grow(self, pos_df, neg_df, possible_conds, initial_rule=None, verbosity=0):
+        """ Fit a new rule to add to a ruleset """
+
+        if initial_rule is None:
+            rule0 = Rule()
+        else:
+            rule0 = copy.deepcopy(initial_rule)
+
+        if verbosity>=4:
+            print('growing rule')
+            print(rule0)
+        rule1 = copy.deepcopy(rule0)
+        while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
+            rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
+            if rule1 is not None:
+                rule0 = rule1
+                if verbosity>=4:
+                    print(f'negs remaining {len(rule0.covers(neg_df))}')
+
+        if not rule0.isempty():
+            if verbosity>=3: print(f'grew rule: {rule0}')
+        else:
+            warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+
+        self = rule0
+
     #############################################
     ##### Rule::grow/prune helper functions #####
     #############################################
@@ -170,7 +191,7 @@ class Rule:
         else:
             successor_rules = []
             for feat in pos_df.columns.values:
-                for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())): # Could optimize by calculating this once during fit and passing it along
+                for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())):
                     if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors
                         successor_rules.append(self+Cond(feat, val))
             return successor_rules
@@ -220,6 +241,7 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), verbosity=0):
                 print(f'negs remaining {len(rule0.covers(neg_df))}')
 
     if not rule0.isempty():
+        if verbosity>=2: print(f'grew rule: {rule0}')
         return rule0
     else:
         warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
@@ -244,6 +266,7 @@ def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_rul
         return rule
 
     if not eval_index_on_ruleset:
+
         # Currently-best pruned rule and its prune value
         best_rule = copy.deepcopy(rule)
         best_v = 0
@@ -279,7 +302,8 @@ def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_rul
         best_ruleset = copy.deepcopy(current_ruleset)
         best_v = 0
 
-        # Iteratively prune and test rule over ruleset
+        # Iteratively prune and test rule over ruleset.
+        # This is unfortunately expensive.
         while current_rule.conds:
             v = prune_metric(current_ruleset, pos_pruneset, neg_pruneset)
             if verbosity>=5: print(f'prune value of {current_rule}: {rnd(v)}')
@@ -292,6 +316,22 @@ def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_rul
             current_rule.conds.pop(-1)
             current_ruleset.rules[rule_index] = current_rule
         return best_rule
+
+class Timer:
+    """ Simple, useful class for keeping track of how long something has been taking """
+
+    def __init__(self):
+        self.start = time.time()
+
+    def buzz(self, reset=True):
+        last_buzz = self.start
+        now = time.time()
+        if reset:
+            self.start = now
+        return(str(int(now-last_buzz)))
+
+    def stop(self):
+        self.elapsed = time.time()-self.start
 
     ###################
     ##### METRICS #####
@@ -319,6 +359,18 @@ def precision(object, pos_df, neg_df):
     else:
         return len(pos_covered) / total_n_covered
 
+def score_accuracy(predictions, actuals):
+    """ For evaluating trained model on test set.
+
+        predictions: <iterable<bool>> True for predicted positive class, False otherwise
+        actuals:     <iterable<bool>> True for actual positive class, False otherwise
+    """
+    t = [pr for pr,act in zip(predictions,actuals) if pr==act]
+    n = predictions
+    print(f't {t}')
+    print(f't {n}')
+    return len(t)/len(n)
+
 def accuracy(object, pos_pruneset, neg_pruneset):
     """ Returns accuracy value of object's classification.
         object: Cond, Rule, or Ruleset
@@ -332,23 +384,15 @@ def accuracy(object, pos_pruneset, neg_pruneset):
     tn = N - len(object.covers(neg_pruneset))
     return (tp + tn) / (P + N)
 
-def best_successor(rule, possible_conds, pos_df, neg_df, eval_on_ruleset=None, verbosity=0):
+def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
     """ Returns for a Rule its best successor Rule according to FOIL information gain metric.
 
         eval_on_ruleset: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
     """
 
-    #if not eval_on_ruleset:
-
-    # If the current rule is empty, require a successor -- even if its gain is negative
-#    if not rule.isempty():
-#        best_gain = 0
-#    else:
-#        best_gain = float('-inf')
     best_gain = 0
-
-    # Find best successor rule
     best_successor_rule = None
+
     for successor in rule.successors(possible_conds, pos_df, neg_df):
         g = gain(rule, successor, pos_df, neg_df)
         if g > best_gain:
@@ -356,25 +400,7 @@ def best_successor(rule, possible_conds, pos_df, neg_df, eval_on_ruleset=None, v
             best_successor_rule = successor
     if verbosity>=5: print(f'gain {rnd(best_gain)} {best_successor_rule}')
     return best_successor_rule
-    """
-    else:
-        current_ruleset = copy.deepcopy(eval_on_ruleset)
-        current_ruleset.add(rule)
 
-        best_ruleset = copy.deepcopy(current_ruleset)
-        best_gain = 0
-
-        for successor in rule.successors(pos_df, neg_df):
-
-            current_ruleset.rules[-1] = successor
-            g = gain(best_ruleset, current_ruleset, pos_df, neg_df)
-            print(f'successor {successor} gain {round(g,0)}')
-            if g > best_gain:
-                best_gain = g
-                best_ruleset.rules[-1] = copy.deepcopy(current_ruleset.rules[-1])
-        print(f'best successor: {best_ruleset.rules[-1]}')
-        return best_ruleset.rules[-1]
-        """
 def give_reasons(irep_, df):
     """ Experimental """
     def pos_reasons(example):
@@ -383,7 +409,6 @@ def give_reasons(irep_, df):
         return [rule for rule in irep_.ruleset.rules if len(rule.covers(example))==1]
 
     return [pos_reasons(df[df.index==i]) for i in df.index]
-
 
     ###################
     ##### HELPERS #####
@@ -583,23 +608,3 @@ def bin_transform(df, fit_dict, names_precision=2):
         feat_transformation = bin_transform_feat(df, feat, bin_fits, names_precision=names_precision)
         df[feat] = feat_transformation
     return df
-
-
-
-"""
-def ensure_samples(df_list, min=1, tries=30):
-    i = 0
-    isvalid = True
-    for df in df_list:
-        if len(df)<min:
-            isvalid=False
-            break
-
-    while (len(pos_growset)==0 or len(neg_growset)==0 or len(pos_pruneset)==0 or len(neg_pruneset)==0):
-        newseed = seed+1 if seed is not None else None
-        pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, prune_size, seed=newseed)
-        neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, prune_size, seed=newseed)
-        if tries>20:
-            raise ValueError(f'Difficulty generating reasonable samples pos_growset {len(pos_growset)} neg_growset {len(neg_growset)}
-                               pos_pruneset {len(pos_pruneset)} neg_pruneset {len(neg_pruneset)}}')
-"""
