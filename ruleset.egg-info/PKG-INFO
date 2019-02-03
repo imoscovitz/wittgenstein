@@ -1,0 +1,16 @@
+Metadata-Version: 1.1
+Name: ruleset
+Version: 0.0.0
+Summary: Implementation of ruleset covering algorithms
+Home-page: https://github.com/imoscovitz/ruleset
+Author: Ilan Moscovitz
+Author-email: ilan.moscovitz@gmail.com
+License: MIT
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7

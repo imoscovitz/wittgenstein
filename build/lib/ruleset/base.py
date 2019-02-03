@@ -7,7 +7,6 @@ import copy
 import warnings
 from numpy import var, mean
 import time
-#from numba import jit
 
 class Ruleset:
     """ Base Ruleset model.
