@@ -35,11 +35,11 @@ We can fit a ruleset classifier:
 >>> ripper_clf
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)>
 ```
-Access the underlying trained model like this. (It's structured as a disjunction of conjunctions -- V represents "or"; ^ represents "and".)
+Access the underlying trained model with the ruleset_ attribute.
+(A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.)
 ```
 >>> ripper_clf.ruleset_
 <Ruleset object: [physician-fee-freeze=n] V [synfuels-corporation-cutback=y^adoption-of-the-budget-resolution=y^anti-satellite-test-ban=n]>
->>>
 ```
 To score our fit model:
 ```
@@ -54,7 +54,7 @@ from sklearn.metrics import precision_score, recall_score
 >>> precision = clf.score(X_test, y_test, precision_score)
 >>> recall = clf.score(X_test, y_test, recall_score)
 >>> print(f'precision: {precision} recall: {recall})
-...
+precision: 0.9914..., recall: 0.9953...
 ```
 To perform predictions:
 ```
