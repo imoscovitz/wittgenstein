@@ -35,7 +35,7 @@ We can fit a ruleset classifier:
 >>> ripper_clf
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)>
 ```
-Access the underlying trained model with the ruleset_ attribute.
+Access the underlying trained model with the ruleset_ attribute.   
 (A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.)
 ```
 >>> ripper_clf.ruleset_
