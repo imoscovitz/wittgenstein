@@ -41,14 +41,15 @@ class IREP:
         return f'<IREP object {fitstr}>'
     __repr__ = __str__
 
-    def fit(self, df, class_feat, pos_class=None, n_discretize_bins=None, random_state=None):
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=None, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
                 df <DataFrame>: categorical training dataset
-                class_feat: column name of class feature
-                pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
+                y: <iterable>: class labels corresponding to df rows. Parameter y or class_feat (see next) must be provided.
+                class_feat: column name of class feature (Use if class feature is still in df.)
 
+                pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
                 n_discretize_bins (optional): try to fit apparent numeric attributes into n_discretize_bins discrete bins.
                                               Pass None to disable auto-discretization. (default=None)
                 random_state: (optional) random state to allow for repeatable results
@@ -56,12 +57,8 @@ class IREP:
 
         # Stage 0: Setup
 
-        # If not given by __init__, define positive class here
-        self.class_feat = class_feat
-        if pos_class:
-            self.pos_class = pos_class
-        else:
-            self.pos_class = df.iloc[0][self.class_feat]
+        # Set up trainset, set class feature name, and set pos class name
+        df, self.class_feat, self.pos_class = base.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
 
         # Anything to discretize?
         numeric_feats = base.find_numeric_feats(df, min_unique=n_discretize_bins, ignore_feats=[self.class_feat])

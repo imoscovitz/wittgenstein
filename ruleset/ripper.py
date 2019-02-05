@@ -47,27 +47,26 @@ class RIPPER:
         return f'<RIPPER object {fitstr} (k={self.k}, prune_size={self.prune_size}, dl_allowance={self.dl_allowance})>'
     __repr__ = __str__
 
-    def fit(self, df, class_feat, pos_class=None, n_discretize_bins=None, random_state=None):
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=None, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
                 df <DataFrame>: categorical training dataset
-                class_feat: column name of class feature
-                pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
+                y: <iterable>: class labels corresponding to df rows. Parameter y or class_feat (see next) must be provided.
+                class_feat: column name of class feature (Use if class feature is still in df.)
 
+                pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
                 n_discretize_bins (optional): try to fit apparent numeric attributes into n_discretize_bins discrete bins.
-                                              Pass None to disable auto-discretization. (default=None)
+                                              Pass None to disable auto-discretization and treat values as categorical. (default=None)
                 random_state: (optional) random state to allow for repeatable results
         """
 
+        ################
         # Stage 0: Setup
+        ################
 
-        # If not given by __init__, define positive class here
-        self.class_feat = class_feat
-        if pos_class:
-            self.pos_class = pos_class
-        else:
-            self.pos_class = df.iloc[0][self.class_feat]
+        # Set up trainset, set class feature name, and set pos class name
+        df, self.class_feat, self.pos_class = base.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
 
         # Precalculate rule df lookup
         #self._set_theory_dl_lookup(df, verbosity=self.verbosity)
@@ -97,7 +96,10 @@ class RIPPER:
         # Collect possible conds
         self._set_possible_conds(df)
 
+        ###############################
         # Stage 1: Grow initial Ruleset
+        ###############################
+
         self.ruleset_ = Ruleset()
         self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
             prune_size=self.prune_size, dl_allowance=self.dl_allowance,
@@ -108,7 +110,10 @@ class RIPPER:
             self.ruleset_.out_pretty()
             print()
 
+        ###########################
         # Stage 2: Optimize Ruleset
+        ###########################
+
         for iter in range(self.k):
             # Create new but reproducible random_state (if applicable)
             iter_random_state = random_state+100 if random_state is not None else None
@@ -124,7 +129,10 @@ class RIPPER:
                 print()
             self.ruleset_ = newset
 
+        #############################################
         # Stage 3: Cover any last remaining positives
+        #############################################
+
         pos_remaining, neg_remaining = base.pos_neg_split(df, self.class_feat, self.pos_class)
         pos_remaining = pos_remaining.drop(self.class_feat,axis=1)
         neg_remaining = neg_remaining.drop(self.class_feat,axis=1)
@@ -143,7 +151,10 @@ class RIPPER:
         else:
             if self.verbosity>=1: print('All pos covered\n')
 
+        #################################################
         # Stage 4: Remove any rules that don't improve dl
+        #################################################
+
         if self.verbosity>=2: print('Optimizing dl...')
         mdl_subset, _ = _rs_total_bits(self.ruleset_, self.ruleset_.possible_conds, pos_df, neg_df,
                                         bestsubset_dl=True, ret_bestsubset=True, verbosity=self.verbosity)
@@ -516,7 +527,7 @@ def _rs_total_bits(ruleset, possible_conds, pos_df, neg_df, bestsubset_dl=False,
     # After all, this is supposed to be an iterative algorithm, it could optimize more times with future k's,
     # and it's not like we're performing an exhaustive search of every possible combination anyways.
 
-    # 2) In what order are you supposed to evaluate? FIFO or LIFO? 
+    # 2) In what order are you supposed to evaluate? FIFO or LIFO?
     # Footnote 7 suggests optimization is done FIFO; the previous page suggests IREP* final dl reduction is done LIFO;
     # and context suggests dl reduction should be performed the same way both times.
 

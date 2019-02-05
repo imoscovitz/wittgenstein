@@ -538,6 +538,42 @@ def rm_covered(object, pos_df, neg_df):
     return (pos_df.drop(object.covers(pos_df).index, axis=0, inplace=False),\
             neg_df.drop(object.covers(neg_df).index, axis=0, inplace=False))
 
+def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
+    """ Process params into trainset, class feature name, and pos class, for use in .fit methods. """
+
+    # Ensure class feature is provided
+    if y is None and class_feat is None:
+        raise ValueError('y or class_feat argument is required')
+
+    # Ensure no class feature name mismatch
+    if y is not None and class_feat is not None \
+            and hasattr(y, 'name') \
+            and y.name != class_feat:
+        raise ValueError(f'Value mismatch between params y {y.name} and class_feat {class_feat}. Besides, you only need to provide one of them.')
+
+    # Set class feature name
+    if class_feat is not None:
+        # (IOW, pass)
+        class_feat = class_feat
+    elif y is not None and hasattr(y, 'name'):
+        # If y is a pandas Series, try to get its name
+        class_feat = y.name
+    else:
+        # Create a name for it
+        class_feat = 'Class'
+
+    # If necessary, merge y into df
+    if y is not None:
+        df[class_feat] = y
+
+    # If provided, define positive class name. Otherwise, assign one.
+    if pos_class is not None:
+        pos_class = pos_class
+    else:
+        pos_class = df.iloc[0][class_feat]
+
+    return (df, class_feat, pos_class)
+
 ########################################
 ##### BONUS: FUNCTIONS FOR BINNING #####
 ########################################
