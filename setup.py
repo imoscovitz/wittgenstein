@@ -1,8 +1,7 @@
 import setuptools
-#from distutils.core import setup
 setuptools.setup(
   name = 'ruleset',
-  version = '0.0.1',
+  version = '1.0.0',
   license='MIT',
   description = 'Implementation of ruleset covering algorithms for explainable machine learning',
   long_description=open('DESCRIPTION.rst').read(),
@@ -16,10 +15,7 @@ setuptools.setup(
           'numpy'
       ],
   classifiers=[
-    'Development Status :: 3 - Alpha',
-    'Intended Audience :: Developers',
-    'Topic :: Software Development :: Build Tools',
-    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python',
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7'
   ],
