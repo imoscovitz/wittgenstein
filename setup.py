@@ -2,7 +2,7 @@ import setuptools
 #from distutils.core import setup
 setuptools.setup(
   name = 'ruleset',
-  version = '0.1.0',
+  version = '0.0.1',
   license='MIT',
   description = 'Implementation of ruleset covering algorithms for explainable machine learning',
   long_description=open('DESCRIPTION.rst').read(),

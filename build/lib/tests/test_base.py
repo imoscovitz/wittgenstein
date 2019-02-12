@@ -31,7 +31,7 @@ def test_split_pos_is_6_neg_is_4():
     assert(len(pos_df),len(neg_df))==(6,4)
 
 def test_shuffled_splits_are_len_7_len_3():
-    df1, df2 = df_shuffled_split(FIRST_10_EXAMPLES,.7,random_state=None)
+    df1, df2 = df_shuffled_split(FIRST_10_EXAMPLES,.7,seed=None)
     assert(len(df1),len(df2))==(7,3)
 
 def test_num_pos_is_6_num_neg_is_4():

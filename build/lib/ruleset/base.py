@@ -27,6 +27,12 @@ class Ruleset:
         ruleset_str = self.__str__()
         return f'<Ruleset object: {ruleset_str}>'
 
+    def __getitem__(self, index):
+        return self.rules[index]
+
+    def __len__(self):
+        return len(self.rules)
+
     def truncstr(self, limit=2, direction='left'):
         """ Return Ruleset string representation limited to a specified number of rules.
 
@@ -89,15 +95,46 @@ class Ruleset:
         return sum([len(r.conds) for r in self.rules])
 
     def _set_possible_conds(self, pos_df, neg_df):
-        """ Stores a list of all possible conds.
+        """ Stores a list of all possible conds. """
 
-            (Used in Rule::successors so as not to rebuild it each time,
-             and in exceptions_dl calculations because nCr portion of formula already accounts for no replacement.)
-        """
+        #Used in Rule::successors so as not to rebuild it each time,
+        # and in exceptions_dl calculations because nCr portion of formula already accounts for no replacement.)
+
         self.possible_conds = []
         for feat in pos_df.columns.values:
             for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())):
                 self.possible_conds.append(Cond(feat, val))
+
+    def predict(self, X_df, give_reasons=False):
+        """ Predict classes of data using a fit Ruleset model.
+
+            args:
+                X_df <DataFrame>: examples to make predictions on.
+
+                give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+
+            returns:
+                list of <bool> values corresponding to examples. True indicates positive predicted class; False non-positive class.
+
+                If give_reasons is True, returns a tuple that contains the above list of predictions
+                    and a list of the corresponding reasons for each prediction;
+                    for each positive prediction, gives a list of all the covering Rules, for negative predictions, an empty list.
+        """
+
+        covered_indices = set(self.covers(X_df).index.tolist())
+        predictions = [i in covered_indices for i in X_df.index]
+
+        if not give_reasons:
+            return predictions
+        else:
+            reasons = []
+            # For each Ruleset-covered example, collect list of every Rule that covers it;
+            # for non-covered examples, collect an empty list
+            for i, p in zip(X_df.index,predictions):
+                example = X_df[X_df.index==i]
+                example_reasons = [rule for rule in self.rules if len(rule.covers(example))==1] if p else []
+                reasons.append(example_reasons)
+            return (predictions, reasons)
 
 class Rule:
     """ Class implementing conjunctions of Conds """
@@ -167,7 +204,8 @@ class Rule:
         if not rule0.isempty():
             if verbosity>=3: print(f'grew rule: {rule0}')
         else:
-            warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+            #warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+            pass
 
         self = rule0
 
@@ -243,7 +281,7 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), verbosity=0):
         if verbosity>=2: print(f'grew rule: {rule0}')
         return rule0
     else:
-        warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+        #warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
         return rule0
 
 def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_ruleset=None, verbosity=0):
@@ -320,9 +358,17 @@ class Timer:
     """ Simple, useful class for keeping track of how long something has been taking """
 
     def __init__(self):
+        """ Create Timer object and hit start. """
+
         self.start = time.time()
 
     def buzz(self, reset=True):
+        """ Returns time elapsed since Timer was created or reset, in seconds.
+
+            args:
+                reset (optional): whether to reset the clock.
+        """
+
         last_buzz = self.start
         now = time.time()
         if reset:
@@ -330,6 +376,8 @@ class Timer:
         return(str(int(now-last_buzz)))
 
     def stop(self):
+        """ Freeze the clock at the amount of time elapsed since Timer was created or reset. """
+
         self.elapsed = time.time()-self.start
 
     ###################
@@ -366,8 +414,6 @@ def score_accuracy(predictions, actuals):
     """
     t = [pr for pr,act in zip(predictions,actuals) if pr==act]
     n = predictions
-    print(f't {t}')
-    print(f't {n}')
     return len(t)/len(n)
 
 def accuracy(object, pos_pruneset, neg_pruneset):
@@ -400,15 +446,6 @@ def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
     if verbosity>=5: print(f'gain {rnd(best_gain)} {best_successor_rule}')
     return best_successor_rule
 
-def give_reasons(irep_, df):
-    """ Experimental """
-    def pos_reasons(example):
-        print(example)
-        assert len(example)==1
-        return [rule for rule in irep_.ruleset.rules if len(rule.covers(example))==1]
-
-    return [pos_reasons(df[df.index==i]) for i in df.index]
-
     ###################
     ##### HELPERS #####
     ###################
@@ -419,12 +456,12 @@ def pos_neg_split(df, class_feat, pos_class):
     neg_df = neg(df, class_feat, pos_class)
     return pos_df, neg_df
 
-def df_shuffled_split(df, split_size, seed=None):
+def df_shuffled_split(df, split_size, random_state=None):
     """ Returns tuple of shuffled and split DataFrame.
         split_size: proportion of rows to include in tuple[0]
     """
-    df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
-    split_at = int(len(df)*(1-split_size))
+    df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
+    split_at = int(len(df)*split_size)
     return (df[:split_at], df[split_at:])
 
 def pos(df, class_feat, pos_class):
@@ -500,6 +537,42 @@ def rm_covered(object, pos_df, neg_df):
     """ Return pos and neg dfs of examples that are not covered by object """
     return (pos_df.drop(object.covers(pos_df).index, axis=0, inplace=False),\
             neg_df.drop(object.covers(neg_df).index, axis=0, inplace=False))
+
+def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
+    """ Process params into trainset, class feature name, and pos class, for use in .fit methods. """
+
+    # Ensure class feature is provided
+    if y is None and class_feat is None:
+        raise ValueError('y or class_feat argument is required')
+
+    # Ensure no class feature name mismatch
+    if y is not None and class_feat is not None \
+            and hasattr(y, 'name') \
+            and y.name != class_feat:
+        raise ValueError(f'Value mismatch between params y {y.name} and class_feat {class_feat}. Besides, you only need to provide one of them.')
+
+    # Set class feature name
+    if class_feat is not None:
+        # (IOW, pass)
+        class_feat = class_feat
+    elif y is not None and hasattr(y, 'name'):
+        # If y is a pandas Series, try to get its name
+        class_feat = y.name
+    else:
+        # Create a name for it
+        class_feat = 'Class'
+
+    # If necessary, merge y into df
+    if y is not None:
+        df[class_feat] = y
+
+    # If provided, define positive class name. Otherwise, assign one.
+    if pos_class is not None:
+        pos_class = pos_class
+    else:
+        pos_class = df.iloc[0][class_feat]
+
+    return (df, class_feat, pos_class)
 
 ########################################
 ##### BONUS: FUNCTIONS FOR BINNING #####
