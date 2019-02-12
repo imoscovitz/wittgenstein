@@ -382,6 +382,9 @@ class RIPPER:
 #### HELPER Class #####
 
 class RulesetStats:
+    # This class is not used in the current implementation but could come in handy for future optimization
+    # by storing and retreiving calculations that may be repeated. 
+    # Haven't incorporated it because there are bigger fish to fry, optimization-wise.
     def __init__(self):
         self.subset_dls = []
         self.ruleset = Ruleset()
@@ -431,15 +434,6 @@ class RulesetStats:
             i -= 1
 
         return tempStats
-
-
-
-
-
-
-
-
-
 
 
 ###################################
