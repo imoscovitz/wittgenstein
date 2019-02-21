@@ -11,7 +11,7 @@ import copy
 import math
 import warnings
 
-from ruleset import base
+from wittgenstein import base
 from .base import Cond, Rule, Ruleset
 from .base import rnd, fit_bins, bin_transform, score_accuracy
 
@@ -25,7 +25,7 @@ class RIPPER:
 
             args:
                 k (optional):            number of RIPPERk optimization iterations (default=2)
-                prune_size (optional):   proportion of training set to be used for pruning (defailt=.33)
+                prune_size (optional):   proportion of training set to be used for pruning (default=.33)
                 dl_allowance (optional): terminate Ruleset grow phase early if a Ruleset description length is encountered
                                             that is more than this amount above the lowest description length so far encountered.
                                             (default=64 bits)
@@ -383,7 +383,7 @@ class RIPPER:
 
 class RulesetStats:
     # This class is not used in the current implementation but could come in handy for future optimization
-    # by storing and retreiving calculations that may be repeated. 
+    # by storing and retreiving calculations that may be repeated.
     # Haven't incorporated it because there are bigger fish to fry, optimization-wise.
     def __init__(self):
         self.subset_dls = []
@@ -463,7 +463,7 @@ def _r_theory_bits(rule, possible_conds, bits_dict=None, verbosity=0):
         return rule.dl
     else:
         if type(rule) != Rule:
-            raise TypeError(f'param rule in _r_theory_bits should be type Rule')
+            raise TypeError(f'param rule in _r_theory_bits is type {type(rule)}; it should be type Rule')
         k = len(rule.conds)                                 # Number of rule conditions
         n = len(possible_conds)                             # Number of possible conditions
         pr = k/n

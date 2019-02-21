@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 
-from ruleset.base import pos, neg, pos_neg_split, df_shuffled_split, num_pos, num_neg
-from ruleset.base import Cond, Rule, Ruleset
+from wittgenstein.base import pos, neg, pos_neg_split, df_shuffled_split, num_pos, num_neg
+from wittgenstein.base import Cond, Rule, Ruleset
 
 FIRST_10_EXAMPLES = pd.read_csv('tests/house-votes-84.csv').head(10)
 CLASS_FEAT = 'Party'

@@ -1,5 +1,8 @@
 # ruleset
 
+_And is there not also the case where we play and - make up the rules as we go along?  
+ - Ludwig Wittgenstein_
+
 This module implements two iterative coverage-based ruleset algorithms: IREP and RIPPERk.
 
 Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/ruleset/blob/master/Performance%20Tests.ipynb)).
@@ -10,12 +13,12 @@ For algorithm details, see my medium post or the papers below in _Useful Referen
 
 To install, use
 ```bash
-$ pip install ruleset
+$ pip install wittgenstein
 ```
 
 To uninstall, use
 ```bash
-$ pip uninstall ruleset
+$ pip uninstall wittgenstein
 ```
 
 ## Usage
@@ -31,8 +34,8 @@ Once you have loaded and split your data...
 ```
 We can fit a ruleset classifier using RIPPER or IREP:
 ```
->>> import ruleset
->>> ripper_clf = ruleset.RIPPER() # Or irep_clf = ruleset.IREP() to build a model using IREP
+>>> import wittgenstein as lw
+>>> ripper_clf = lw.RIPPER() # Or irep_clf = lw.IREP() to build a model using IREP
 >>> ripper_clf.fit(train, class_feat='Party') # Or you can call .fit with params train_X, train_y. See docstrings for hyperparameter options.
 >>> ripper_clf
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and medium post
