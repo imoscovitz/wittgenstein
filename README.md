@@ -1,15 +1,17 @@
 # wittgenstein
 
-_And is there not also the case where we play and - make up the rules as we go along?  
-  Ludwig Wittgenstein_
+_And is there not also the case where we play and -- make up the rules as we go along?  
+  -Ludwig Wittgenstein_
 
 ![the duck-rabbit](https://github.com/imoscovitz/wittgenstein/blob/master/duck-rabbit.jpg)
 
-This module implements two iterative coverage-based ruleset algorithms: IREP and RIPPERk.
+## Summary
+
+This package implements two iterative coverage-based ruleset algorithms: IREP and RIPPERk.
 
 Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/ruleset/blob/master/Performance%20Tests.ipynb)).
 
-For algorithm details, see my medium post or the papers below in _Useful References_.
+For explanation of the algorithms, see my medium post or the papers below in _Useful References_.
 
 ## Installation
 
@@ -38,7 +40,7 @@ We can fit a ruleset classifier using RIPPER or IREP:
 ```
 >>> import wittgenstein as lw
 >>> ripper_clf = lw.RIPPER() # Or irep_clf = lw.IREP() to build a model using IREP
->>> ripper_clf.fit(train, class_feat='Party') # Or you can call .fit with params train_X, train_y. See docstrings for hyperparameter options.
+>>> ripper_clf.fit(train, class_feat='Party') # Or call .fit with params train_X, train_y
 >>> ripper_clf
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and medium post
 ```
@@ -81,7 +83,7 @@ We can also ask our model to tell us why it made each positive prediction that i
 ```
 
 ## Useful references
-- My medium post about the package (coming soon)
+- My medium post on IREP, RIPPER, and wittgenstein (coming soon)
 - [Furnkrantz-Widmer IREP paper](https://pdfs.semanticscholar.org/f67e/bb7b392f51076899f58c53bf57d5e71e36e9.pdf)
 - [Cohen's RIPPER paper](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.107.2612&rep=rep1&type=pdf)
 - [Partial decision trees](https://researchcommons.waikato.ac.nz/bitstream/handle/10289/1047/uow-cs-wp-1998-02.pdf?sequence=1&isAllowed=y)
