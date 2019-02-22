@@ -1,0 +1,16 @@
+DESCRIPTION.rst
+MANIFEST.in
+README.md
+setup.py
+tests/__init__.py
+tests/test_base.py
+wittgenstein/__init__.py
+wittgenstein/base.py
+wittgenstein/irep.py
+wittgenstein/ripper.py
+wittgenstein/wittgenstein.py
+wittgenstein.egg-info/PKG-INFO
+wittgenstein.egg-info/SOURCES.txt
+wittgenstein.egg-info/dependency_links.txt
+wittgenstein.egg-info/requires.txt
+wittgenstein.egg-info/top_level.txt

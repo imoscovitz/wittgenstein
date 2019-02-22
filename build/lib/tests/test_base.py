@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 
-from ruleset.base import pos, neg, pos_neg_split, df_shuffled_split, num_pos, num_neg
-from ruleset.base import Cond, Rule, Ruleset
+from wittgenstein.base import pos, neg, pos_neg_split, df_shuffled_split, num_pos, num_neg
+from wittgenstein.base import Cond, Rule, Ruleset
 
 FIRST_10_EXAMPLES = pd.read_csv('tests/house-votes-84.csv').head(10)
 CLASS_FEAT = 'Party'
@@ -31,7 +31,7 @@ def test_split_pos_is_6_neg_is_4():
     assert(len(pos_df),len(neg_df))==(6,4)
 
 def test_shuffled_splits_are_len_7_len_3():
-    df1, df2 = df_shuffled_split(FIRST_10_EXAMPLES,.7,seed=None)
+    df1, df2 = df_shuffled_split(FIRST_10_EXAMPLES,.7,random_state=None)
     assert(len(df1),len(df2))==(7,3)
 
 def test_num_pos_is_6_num_neg_is_4():
