@@ -1,7 +1,9 @@
 # wittgenstein
 
 _And is there not also the case where we play and - make up the rules as we go along?  
- - Ludwig Wittgenstein_
+  Ludwig Wittgenstein_
+
+![the duck-rabbit](https://github.com/imoscovitz/wittgenstein/blob/master/duck-rabbit.jpg)
 
 This module implements two iterative coverage-based ruleset algorithms: IREP and RIPPERk.
 
