@@ -12,9 +12,9 @@ import math
 import random
 import copy
 
-from ruleset import base
+from wittgenstein import base
 from .base import Cond, Rule, Ruleset
-from .base import rnd, fit_bins, bin_transform, score_accuracy
+from .base import rnd, score_accuracy, bin_df
 
 class IREP:
     """ Class for generating ruleset classification models. """
@@ -41,7 +41,7 @@ class IREP:
         return f'<IREP object {fitstr}>'
     __repr__ = __str__
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=None, random_state=None):
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
@@ -50,8 +50,8 @@ class IREP:
                 class_feat: column name of class feature (Use if class feature is still in df.)
 
                 pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
-                n_discretize_bins (optional): try to fit apparent numeric attributes into n_discretize_bins discrete bins.
-                                              Pass None to disable auto-discretization. (default=None)
+                n_discretize_bins (optional): Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range.
+                                              Pass None to disable auto-discretization. (default=10)
                 random_state: (optional) random state to allow for repeatable results
         """
 
@@ -61,24 +61,10 @@ class IREP:
         df, self.class_feat, self.pos_class = base.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
 
         # Anything to discretize?
-        numeric_feats = base.find_numeric_feats(df, min_unique=n_discretize_bins, ignore_feats=[self.class_feat])
-        if numeric_feats:
-            if n_discretize_bins is not None:
-                if self.verbosity==1:
-                    print(f'binning data...\n')
-                elif self.verbosity>=2:
-                    print(f'binning features {numeric_feats}...')
-                self.bin_transformer_ = fit_bins(df, n_bins=n_discretize_bins, output=False, ignore_feats=[self.class_feat], verbosity=self.verbosity)
-                binned_df = bin_transform(df, self.bin_transformer_)
-            else:
-                n_unique_values = sum([len(u) for u in [df[f].unique() for f in numeric_feats]])
-                warnings.warn(f'Optional param n_discretize_bins=None, but there are apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal', RuntimeWarning)
-                binned_df=None
-        else:
-            binned_df=None
+        df, self.bin_transformer_ = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=[self.class_feat], verbosity=self.verbosity)
 
         # Split df into pos, neg classes
-        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class) if binned_df is None else base.pos_neg_split(binned_df, self.class_feat, self.pos_class)
+        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class)
         pos_df = pos_df.drop(self.class_feat,axis=1)
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
@@ -110,8 +96,13 @@ class IREP:
 
         if not hasattr(self, 'ruleset_'):
             raise AttributeError('You should fit an IREP object before making predictions with it.')
-        else:
+
+        if not self.bin_transformer_:
             return self.ruleset_.predict(X_df, give_reasons=give_reasons)
+        else:
+            binned_X = X_df.copy()
+            base.bin_transform(binned_X, self.bin_transformer_)
+            return self.ruleset_.predict(binned_X, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
         """ Test performance of an IREP-fit model.

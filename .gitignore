@@ -1,3 +1,5 @@
 *.DS_Store
 *__pycache__
 *.pkl
+.ipynb_checkpoints/
+wittgenstein/.ipynb_checkpoints/

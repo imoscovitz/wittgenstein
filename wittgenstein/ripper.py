@@ -13,7 +13,7 @@ import warnings
 
 from wittgenstein import base
 from .base import Cond, Rule, Ruleset
-from .base import rnd, fit_bins, bin_transform, score_accuracy
+from .base import rnd, score_accuracy, bin_df
 
 class RIPPER:
     """ Class for generating ruleset classification models.
@@ -47,7 +47,7 @@ class RIPPER:
         return f'<RIPPER object {fitstr} (k={self.k}, prune_size={self.prune_size}, dl_allowance={self.dl_allowance})>'
     __repr__ = __str__
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=None, random_state=None):
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
@@ -56,8 +56,9 @@ class RIPPER:
                 class_feat: column name of class feature (Use if class feature is still in df.)
 
                 pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
-                n_discretize_bins (optional): try to fit apparent numeric attributes into n_discretize_bins discrete bins.
-                                              Pass None to disable auto-discretization and treat values as categorical. (default=None)
+                n_discretize_bins (optional): Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range.
+                                              Setting to smaller values can improve training speed.
+                                              Pass None to disable auto-discretization and treat values as categorical. (default=10)
                 random_state: (optional) random state to allow for repeatable results
         """
 
@@ -72,24 +73,10 @@ class RIPPER:
         #self._set_theory_dl_lookup(df, verbosity=self.verbosity)
 
         # Anything to discretize?
-        numeric_feats = base.find_numeric_feats(df, min_unique=n_discretize_bins, ignore_feats=[self.class_feat])
-        if numeric_feats:
-            if n_discretize_bins is not None:
-                if self.verbosity==1:
-                    print(f'binning data...\n')
-                elif self.verbosity>=2:
-                    print(f'binning features {numeric_feats}...')
-                self.bin_transformer_ = fit_bins(df, n_bins=n_discretize_bins, output=False, ignore_feats=[self.class_feat], verbosity=self.verbosity)
-                binned_df = bin_transform(df, self.bin_transformer_)
-            else:
-                n_unique_values = sum([len(u) for u in [df[f].unique() for f in numeric_feats]])
-                warnings.warn(f'Optional param n_discretize_bins=None, but there are apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal', RuntimeWarning)
-                binned_df=None
-        else:
-            binned_df=None
+        df, self.bin_transformer_ = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=[self.class_feat], verbosity=self.verbosity)
 
         # Split df into pos, neg classes
-        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class) if binned_df is None else base.pos_neg_split(binned_df, self.class_feat, self.pos_class)
+        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class)
         pos_df = pos_df.drop(self.class_feat,axis=1)
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
@@ -114,20 +101,25 @@ class RIPPER:
         # Stage 2: Optimize Ruleset
         ###########################
 
-        for iter in range(self.k):
+        for iter in range(1, self.k+1):
             # Create new but reproducible random_state (if applicable)
             iter_random_state = random_state+100 if random_state is not None else None
             # Run optimization iteration
-            if self.verbosity>=1: print(f'optimization run {iter+1} of {self.k}')
+            if self.verbosity>=1: print(f'optimization run {iter} of {self.k}')
             newset = self._optimize_ruleset(self.ruleset_, pos_df, neg_df, prune_size=self.prune_size, random_state=iter_random_state)
 
             if self.verbosity>=1:
                 print()
                 print('OPTIMIZED RULESET:')
-                if self.verbosity>=2: print(f'iteration {iter+1} of {self.k}\n modified rules {[i for i in range(len(self.ruleset_.rules)) if self.ruleset_.rules[i]!= newset.rules[i]]}')
+                if self.verbosity>=2: print(f'iteration {iter} of {self.k}\n modified rules {[i for i in range(len(self.ruleset_.rules)) if self.ruleset_.rules[i]!= newset.rules[i]]}')
                 newset.out_pretty()
                 print()
-            self.ruleset_ = newset
+
+            if iter!= self.k and self.ruleset_ == newset:
+                if self.verbosity>=1: print('No changes were made. Halting optimization.')
+                break
+            else:
+                self.ruleset_ = newset
 
         #############################################
         # Stage 3: Cover any last remaining positives
@@ -182,8 +174,13 @@ class RIPPER:
 
         if not hasattr(self, 'ruleset_'):
             raise AttributeError('You should fit a RIPPER object before making predictions with it.')
-        else:
+
+        if not self.bin_transformer_:
             return self.ruleset_.predict(X_df, give_reasons=give_reasons)
+        else:
+            binned_X = X_df.copy()
+            base.bin_transform(binned_X, self.bin_transformer_)
+            return self.ruleset_.predict(binned_X, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
         """ Test performance of a RIPPER-fit model.

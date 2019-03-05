@@ -50,9 +50,9 @@ class Ruleset:
             return self.__str__()
 
     def __eq__(self, other):
-        if type(other)!=Rule:
+        if type(other)!=Ruleset:
             raise TypeError(f'{self} __eq__ {other}: a Ruleset can only be compared with another Ruleset')
-        for r in self.rules:
+        for r in self.rules: # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
             if r not in other.rules: return False
         for r in other.rules: # Check the other way around too. (Can't compare lengths instead b/c there might be duplicate rules.)
             if r not in self.rules: return False
@@ -578,9 +578,36 @@ def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
 ##### BONUS: FUNCTIONS FOR BINNING #####
 ########################################
 
+def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
+    """ Returns df with seemingly numeric features binned, and the bin_transformer, if binning takes places. """
+
+    isbinned = False
+    min_unique = n_discretize_bins if n_discretize_bins else 10 # Minimum unique values to consider continuous. Override with 10 (rather than halt) to allow warnings to occur
+    numeric_feats = find_numeric_feats(df, min_unique=min_unique, ignore_feats=ignore_feats)
+
+    if numeric_feats:
+        if n_discretize_bins:
+            if verbosity==1:
+                print(f'binning data...\n')
+            elif verbosity>=2:
+                print(f'binning features {numeric_feats}...')
+            binned_df = df.copy()
+            bin_transformer = fit_bins(binned_df, n_bins=n_discretize_bins, output=False, ignore_feats=ignore_feats, verbosity=verbosity)
+            binned_df = bin_transform(binned_df, bin_transformer)
+            isbinned = True
+        else:
+            n_unique_values = sum([len(u) for u in [df[f].unique() for f in numeric_feats]])
+            warnings.warn(f"There are {len(numeric_feats)} apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'", RuntimeWarning)
+
+    if isbinned:
+        return binned_df, bin_transformer
+    else:
+        return df, None
+
 def find_numeric_feats(df, min_unique=10, ignore_feats=[]):
-    """ Returns df features that seem to be numeric """
-    feats = df.dtypes[(df.dtypes=='float64') | (df.dtypes=='int64')].index.tolist()
+    """ Returns df features that seem to be numeric. """
+    #feats = df.dtypes[(df.dtypes=='float64') | (df.dtypes=='int64')].index.tolist()
+    feats = df._get_numeric_data().columns
     feats = [f for f in feats if f not in ignore_feats]
     feats = [f for f in feats if len(df[f].unique())>min_unique]
     return feats
@@ -603,25 +630,30 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
         sorted_df = df.sort_values(by=[feat])
         sorted_values = sorted_df[feat].tolist()
 
-        if verbosity>=4: print (f'{feat}: fitting {len(df[feat].unique())} unique vals in {n_bins} bins')
+        if verbosity>=4: print (f'{feat}: fitting {len(df[feat].unique())} unique vals into {n_bins} bins')
         bin_ranges = []
         finish_i=-1
         sizes=[]
-        for bin_i in range(0,n_bins):
-            #print(f'bin {bin_i} of {range(n_bins)}')
-            start_i = bin_size*(bin_i)
-            finish_i = bin_size*(bin_i+1) if bin_i<n_bins-1 else len(sorted_df)-1
+
+        bin = 0
+        start_i = 0
+        while bin < n_bins and start_i < len(sorted_values):
+            finish_i = min(start_i+bin_size, len(sorted_df)-1)
             while finish_i<len(sorted_df)-1 and finish_i!=0 and \
                     sorted_df.iloc[finish_i][feat]==sorted_df.iloc[finish_i-1][feat]: # ensure next bin begins on a new value
                 finish_i+=1
-                #print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
+                print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
             sizes.append(finish_i-start_i)
-            #print(f'bin_i {bin_i}, start_i {start_i} {sorted_df.iloc[start_i][feat]}, finish_i {finish_i} {sorted_df.iloc[finish_i][feat]}')
+            if verbosity >=4: print(f'bin #{bin}, start_i {start_i} {sorted_df.iloc[start_i][feat]}, finish_i {finish_i} {sorted_df.iloc[finish_i][feat]}')
             start_val = sorted_values[start_i]
             finish_val = sorted_values[finish_i]
             bin_range = (start_val, finish_val)
             bin_ranges.append(bin_range)
-        if verbosity>=5: print(f'-bin sizes {sizes}; dataVMR={rnd(var(df[feat])/mean(df[feat]))}, binVMR={rnd(var(sizes)/mean(sizes))}')#, axis=None, dtype=None, out=None, ddof=0)})
+
+            start_i = finish_i+1
+            bin += 1
+
+        if verbosity>=4: print(f'-bin sizes {sizes}; dataVMR={rnd(var(df[feat])/mean(df[feat]))}, binVMR={rnd(var(sizes)/mean(sizes))}')#, axis=None, dtype=None, out=None, ddof=0)})
         return bin_ranges
 
     # Create dict to store fit definitions for each feature
@@ -640,7 +672,8 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
 
 def bin_transform(df, fit_dict, names_precision=2):
     """
-    Uses a pre-collected dictionary of fits to transform df features into bins
+    Uses a pre-collected dictionary of fits to transform df features into bins.
+    Returns the fit df rather than modifying inplace.
     """
 
     def bin_transform_feat(df, feat, bin_fits, names_precision=names_precision):
@@ -653,18 +686,18 @@ def bin_transform(df, fit_dict, names_precision=2):
             Returns bin string name for a given numberical value
             Assumes bin_fit_list is ordered
             """
-            min = bin_fit_list[0][0]
-            max = bin_fit_list[-1][1]
+            min_val = bin_fit_list[0][0]
+            max_val = bin_fit_list[-1][1]
             for bin_fit in bin_fits:
                 if value <= bin_fit[1]:
                     start_name = str(round(bin_fit[0], names_precision))
                     finish_name = str(round(bin_fit[1], names_precision))
                     bin_name = '-'.join([start_name, finish_name])
                     return bin_name
-            if value < min:
-                return min
-            elif value > max:
-                return max
+            if value < min_val:
+                return min_val
+            elif value > max_val:
+                return max_val
             else:
                 raise ValueError('No bin found for value', value)
 
