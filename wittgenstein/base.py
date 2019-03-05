@@ -642,9 +642,9 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
             while finish_i<len(sorted_df)-1 and finish_i!=0 and \
                     sorted_df.iloc[finish_i][feat]==sorted_df.iloc[finish_i-1][feat]: # ensure next bin begins on a new value
                 finish_i+=1
-                print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
+                #print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
             sizes.append(finish_i-start_i)
-            if verbosity >=4: print(f'bin #{bin}, start_i {start_i} {sorted_df.iloc[start_i][feat]}, finish_i {finish_i} {sorted_df.iloc[finish_i][feat]}')
+            if verbosity >=4: print(f'bin #{bin}, start_idx {start_i} value: {sorted_df.iloc[start_i][feat]}, finish_idxx {finish_i} value: {sorted_df.iloc[finish_i][feat]}')
             start_val = sorted_values[start_i]
             finish_val = sorted_values[finish_i]
             bin_range = (start_val, finish_val)
