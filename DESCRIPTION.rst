@@ -3,6 +3,8 @@
 _And is there not also the case where we play and--make up the rules as we go along?
   -Ludwig Wittgenstein_
 
+![the duck-rabbit](https://github.com/imoscovitz/wittgenstein/blob/master/duck-rabbit.jpg)
+
 ## Summary
 
 This package implements two iterative coverage-based ruleset algorithms: IREP and RIPPERk.
@@ -81,7 +83,7 @@ We can also ask our model to tell us why it made each positive prediction that i
 ```
 
 ## Issues
-This is an early version of wittgenstein. If you encounter any issues or have feedback or improvement requests for how wittgenstein could be made more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
+If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be made more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
 
 ## Contributing
 Contributions are welcome! If you are interested in contributing, let me know at ilan.moscovitz@gmail.com or on [linkedin](https://www.linkedin.com/in/ilan-moscovitz/).
