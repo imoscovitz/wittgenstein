@@ -45,9 +45,9 @@ We can fit a ruleset classifier using RIPPER or IREP.
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and medium post
 ```
 
-Access the underlying trained model with the ruleset_ attribute.
+Access the underlying trained model with the ruleset_ attribute. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.
 
-A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'. In other words, the model predicts positive class if any one of the inner-nested condition-combinations are all true:
+In other words, the model predicts positive class if any one of the inner-nested condition-combinations are all true:
 ```python
 >>> ripper_clf.ruleset_
 <Ruleset object: [physician-fee-freeze=n] V [synfuels-corporation-cutback=y^adoption-of-the-budget-resolution=y^anti-satellite-test-ban=n]>
