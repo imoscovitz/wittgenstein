@@ -11,7 +11,7 @@ This package implements two iterative coverage-based ruleset algorithms: IREP an
 
 Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/ruleset/blob/master/Performance%20Tests.ipynb)).
 
-For explanation of the algorithms, see my article in Towards Data Science, or the papers below, in _Useful References_.
+For explanation of the algorithms, see my article in _Towards Data Science_, or the papers below, under [Useful References](https://github.com/imoscovitz/wittgenstein#useful-references).
 
 ## Installation
 
@@ -33,10 +33,10 @@ Once you have loaded and split your data...
 ```python
 >>> import pandas as pd
 >>> df = pd.read_csv(dataset_filename)
->>> from sklearn.model_selection import train_test_split # or any other mechanism you want to use for data partitioning
+>>> from sklearn.model_selection import train_test_split # Or any other mechanism you want to use for data partitioning
 >>> train, test = train_test_split(df, test_size=.33)
 ```
-We can fit a ruleset classifier using RIPPER or IREP:
+We can fit a ruleset classifier using RIPPER or IREP.
 ```python
 >>> import wittgenstein as lw
 >>> ripper_clf = lw.RIPPER() # Or irep_clf = lw.IREP() to build a model using IREP
@@ -45,7 +45,7 @@ We can fit a ruleset classifier using RIPPER or IREP:
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and medium post
 ```
 
-Access the underlying trained model with the ruleset_ attribute. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.
+Access the underlying trained model with the ruleset_ attribute. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'. In other words, if any one of the inner-nested combinations of features are all true, the model predicts positive class.
 ```python
 >>> ripper_clf.ruleset_
 <Ruleset object: [physician-fee-freeze=n] V [synfuels-corporation-cutback=y^adoption-of-the-budget-resolution=y^anti-satellite-test-ban=n]>

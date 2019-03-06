@@ -1,6 +1,6 @@
 Metadata-Version: 1.1
 Name: wittgenstein
-Version: 0.1.3
+Version: 0.1.4
 Summary: Implementation of ruleset covering algorithms for explainable machine learning
 Home-page: https://github.com/imoscovitz/wittgenstein
 Author: Ilan Moscovitz

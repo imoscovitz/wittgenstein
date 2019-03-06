@@ -3,7 +3,7 @@ setuptools.setup(
   name = 'wittgenstein',
   version = '0.1.4',
   license='MIT',
-  description = 'Implementation of ruleset covering algorithms for explainable machine learning',
+  description = 'Ruleset covering algorithms for explainable machine learning',
   long_description=open('DESCRIPTION.rst').read(),
   author = 'Ilan Moscovitz',
   author_email = 'ilan.moscovitz@gmail.com',
