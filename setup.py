@@ -1,7 +1,7 @@
 import setuptools
 setuptools.setup(
   name = 'wittgenstein',
-  version = '0.1.4',
+  version = '0.1.5',
   license='MIT',
   description = 'Ruleset covering algorithms for explainable machine learning',
   long_description=open('DESCRIPTION.rst').read(),
