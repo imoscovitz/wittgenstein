@@ -10,6 +10,7 @@ import pandas as pd
 import copy
 import math
 import warnings
+import numpy as np
 
 from wittgenstein import base
 from .base import Cond, Rule, Ruleset
@@ -47,7 +48,14 @@ class RIPPER:
         return f'<RIPPER object {fitstr} (k={self.k}, prune_size={self.prune_size}, dl_allowance={self.dl_allowance})>'
     __repr__ = __str__
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, random_state=None):
+    def out_model(self):
+        """ Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'. """
+        if hasattr(self,'ruleset_'):
+            self.ruleset_.out_pretty()
+        else:
+            print('no model fitted')
+
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
@@ -60,6 +68,13 @@ class RIPPER:
                                               Setting to smaller values can improve training speed.
                                               Pass None to disable auto-discretization and treat values as categorical. (default=10)
                 random_state: (optional) random state to allow for repeatable results
+
+                options to stop early. Intended for improving model interpretability or limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
+                Note: small max_rule_conds may result in the k-optimizations stage making fewer changes.
+                max_rules (optional): maximum number of rules. default=None
+                max_rule_conds (optional): maximum number of conds per rule. default=None
+                max_total_conds (optional): maximum number of total conds in entire ruleset. default=None
+
         """
 
         ################
@@ -75,6 +90,13 @@ class RIPPER:
         # Anything to discretize?
         df, self.bin_transformer_ = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=[self.class_feat], verbosity=self.verbosity)
 
+        # Type as categorical -- this doesn't seem to do anything except slow it down
+        #new_type = 'category'
+        #print('as type', new_type)
+        #df = base.as_type(df, new_type)
+        #print(df.dtypes)
+
+
         # Split df into pos, neg classes
         pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class)
         pos_df = pos_df.drop(self.class_feat,axis=1)
@@ -89,7 +111,7 @@ class RIPPER:
 
         self.ruleset_ = Ruleset()
         self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
-            prune_size=self.prune_size, dl_allowance=self.dl_allowance,
+            prune_size=self.prune_size, dl_allowance=self.dl_allowance, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds,
             random_state=random_state)
         if self.verbosity >= 1:
             print()
@@ -133,7 +155,7 @@ class RIPPER:
             if self.verbosity>=2:
                 print(f'{len(pos_remaining)} pos left. Growing final rules...')
             newset = self._grow_ruleset(pos_remaining, neg_remaining, initial_ruleset=self.ruleset_,
-                prune_size=self.prune_size, dl_allowance=self.dl_allowance,
+                prune_size=self.prune_size, dl_allowance=self.dl_allowance, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds,
                 random_state=random_state)
             if self.verbosity>=1:
                 print('GREW FINAL RULES')
@@ -155,6 +177,9 @@ class RIPPER:
             print('FINAL RULESET:')
             self.ruleset_.out_pretty()
             print()
+
+        # Fit probas
+        self._refit_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
     def predict(self, X_df, give_reasons=False):
         """ Predict classes of data using a RIPPER-fit model.
@@ -201,6 +226,72 @@ class RIPPER:
             actuals = [yi==self.pos_class for yi in y]
         return score_function(actuals, predictions)
 
+    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1):
+        """ Predict probabilities for each class using a fit Ruleset model.
+
+                args:
+                    X_df <DataFrame>: examples to make predictions on.
+
+                    give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+                    min_samples (optional) <int>: return None for each example proba that lack this many samples
+                                                  set to None to ignore. (default=None)
+
+                    give_reasons (optional) <bool>: whether to also return reasons for each prediction made.
+                    ret_n (optional) <bool>: whether to also return the number of samples used for calculating each examples proba
+
+                returns:
+                    numpy array of values corresponding to each example's classes probabilities.
+
+        """
+
+        # probas for all negative predictions
+        uncovered_proba = base.weighted_avg_freqs([self.ruleset_.uncovered_class_freqs])
+        uncovered_n = sum(self.ruleset_.uncovered_class_freqs)
+
+        # make predictions
+        predictions, covering_rules = self.predict(X_df, give_reasons=True)
+        N = []
+
+        # collect probas
+        probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
+        for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
+            n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
+            if p and (n < 1 or (min_samples and n < min_samples)):
+                probas[i, :] = None
+                N.append(n)
+            elif (not p) and (uncovered_n < 1 or uncovered_n < min_samples):
+                probas[i, :] = None
+                N.append(n)
+            elif p: # pos prediction
+                probas[i, :] = base.weighted_avg_freqs([rule.class_freqs for rule in cr])
+                N.append(n)
+            else: # neg prediction
+                probas[i, :] = uncovered_proba
+                N.append(uncovered_n)
+
+        # return probas
+        result = base.flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
+        return result
+
+    def _refit_proba(self, Xy_df, min_samples=20, require_min_samples=True, discretize=True):
+        """ Currently experimental; Not guaranteed stable for user calls.
+            Recalibrate a classifier's probability estimations with unseen labeled data.
+            Does not affect the model or which predictions it makes; only probability estimates.
+
+            Note1: RunTimeWarning is quite possible to ensure selection of desired behavior with min_samples and require_min_samples param.
+            Note2: It is possible refitting could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+
+            Xy_df <DataFrame>: labeled data
+
+            min_samples <int> (optional): required minimum number of samples per Rule
+                                          default=10. set None to ignore min sampling requirement so long as at least one sample exists.
+            require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
+                                                   False: warn, but still replace Rules that have enough samples
+            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize refit_proba's training data
+                                          default=True
+        """
+        self.ruleset_._refit_proba(Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
         """ Precalculate rule theory dls for various-sized rules. """
 
@@ -217,7 +308,7 @@ class RIPPER:
             if verbosity>=2:
                 print(f'updated dl for rule size {n}: {dl}')
 
-    def _grow_ruleset(self, pos_df, neg_df, prune_size, dl_allowance, initial_ruleset=None, random_state=None):
+    def _grow_ruleset(self, pos_df, neg_df, prune_size, dl_allowance, initial_ruleset=None, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None):
         """ Grow a Ruleset with pruning. """
         pos_remaining = pos_df.copy()
         neg_remaining = neg_df.copy()
@@ -235,6 +326,11 @@ class RIPPER:
             print('growing ruleset...')
             print()
         while len(pos_remaining) > 0 and dl_diff <= self.dl_allowance:
+
+            # If applicable, check for user-specified early stopping
+            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds):
+                break
+
             # Grow-prune split remaining uncovered examples
             pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, (1-prune_size), random_state=random_state)
             neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, (1-prune_size), random_state=random_state)
@@ -244,7 +340,7 @@ class RIPPER:
             if len(pos_growset)==0: break # Probably safe, but a little dicey to only check pos_growset.
 
             # Grow Rule
-            grown_rule = base.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, verbosity=self.verbosity)
+            grown_rule = base.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=max_rule_conds, verbosity=self.verbosity)
             if grown_rule.isempty(): break # Generated an empty rule b/c no good conds exist
 
             # Prune Rule
@@ -287,9 +383,13 @@ class RIPPER:
             if self.verbosity>=3:
                 print(f'examples remaining: {len(pos_remaining)} pos, {len(neg_remaining)} neg')
                 print()
+
+        # If applicable, trim total conds
+        ruleset.trim_conds(max_total_conds=max_total_conds)
+
         return ruleset
 
-    def _optimize_ruleset(self, ruleset, pos_df, neg_df, prune_size, random_state=None):
+    def _optimize_ruleset(self, ruleset, pos_df, neg_df, prune_size, max_rule_conds=None, random_state=None):
         """ Optimization phase. """
 
         if self.verbosity>=2:
@@ -313,7 +413,7 @@ class RIPPER:
 
             # Create alternative rules
             if self.verbosity>=4: print(f'creating replacement for {i} of {len(original_ruleset.rules)}: {ruleset.rules[i]}')
-            g_replacement = base.grow_rule(pos_growset, neg_growset, original_ruleset.possible_conds, initial_rule=Rule(), verbosity=self.verbosity)
+            g_replacement = base.grow_rule(pos_growset, neg_growset, original_ruleset.possible_conds, initial_rule=Rule(), max_rule_conds=max_rule_conds, verbosity=self.verbosity)
             replacement_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, g_replacement))
             pr_replacement = base.prune_rule(g_replacement, _RIPPER_optimization_prune_metric, pos_pruneset, neg_pruneset, eval_index_on_ruleset=(i,replacement_ruleset), verbosity=self.verbosity)
             replacement_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, pr_replacement))
@@ -322,7 +422,7 @@ class RIPPER:
                 print(f'pruned replacement is {pr_replacement}')
 
             if self.verbosity>=3: print(f'creating revision for {i} of {len(original_ruleset.rules)}: {ruleset.rules[i]}')
-            g_revision = base.grow_rule(pos_growset, neg_growset, original_ruleset.possible_conds, initial_rule=ruleset.rules[i], verbosity=self.verbosity)
+            g_revision = base.grow_rule(pos_growset, neg_growset, original_ruleset.possible_conds, initial_rule=ruleset.rules[i], max_rule_conds=max_rule_conds, verbosity=self.verbosity)
             revision_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, g_revision))
             pr_revision = base.prune_rule(g_revision, _RIPPER_optimization_prune_metric, pos_pruneset, neg_pruneset, eval_index_on_ruleset=(i,revision_ruleset), verbosity=self.verbosity)
             revision_ruleset = Ruleset(base.i_replaced(original_ruleset.rules, i, pr_revision))
@@ -350,14 +450,19 @@ class RIPPER:
                     print(f'replacement: {rep_str}')
                     print(f'revision: {rev_str}')
                     print(f'*best: {best_str}')
+                    if best_rule in new_ruleset: print(f'best already included in optimization -- retaining original')
                     print()
                 else:
                     print(f'original: {rule}) | {rnd(original_dl)} bits')
                     print(f'replacement: {rep_str} | {rnd(replacement_dl)} bits')
                     print(f'revision: {rev_str} | {rnd(revision_dl)} bits')
                     print(f'*best: {best_str} | {rnd(min([replacement_dl, revision_dl, original_dl]))} bits')
+                    if best_rule in new_ruleset: print(f'best already included in optimization -- retaining original')
                     print()
-            new_ruleset.rules[i] = best_rule
+            if best_rule not in new_ruleset:
+                new_ruleset.rules[i] = best_rule
+            else:
+                new_ruleset.rules[i] = rule
 
             # Remove covered examples
             pos_remaining, neg_remaining = base.rm_covered(rule, pos_remaining, neg_remaining)

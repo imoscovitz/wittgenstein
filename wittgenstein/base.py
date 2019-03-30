@@ -1,6 +1,7 @@
 """ Base classes and functions for ruleset classifiers """
 
 import math
+import numpy as np
 import operator as op
 from functools import reduce
 import copy
@@ -105,6 +106,12 @@ class Ruleset:
             for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())):
                 self.possible_conds.append(Cond(feat, val))
 
+    def trim_conds(self, max_total_conds=None):
+        """ Reduce the total number of Conds in a Ruleset by removing Rules """
+        if max_total_conds is not None:
+            while len(self.rules) > 0 and self.count_conds() > max_total_conds:
+                self.rules.pop(-1)
+
     def predict(self, X_df, give_reasons=False):
         """ Predict classes of data using a fit Ruleset model.
 
@@ -130,11 +137,82 @@ class Ruleset:
             reasons = []
             # For each Ruleset-covered example, collect list of every Rule that covers it;
             # for non-covered examples, collect an empty list
-            for i, p in zip(X_df.index,predictions):
+            for i, p in zip(X_df.index, predictions):
                 example = X_df[X_df.index==i]
                 example_reasons = [rule for rule in self.rules if len(rule.covers(example))==1] if p else []
                 reasons.append(example_reasons)
             return (predictions, reasons)
+
+    def _refit_proba(self, Xy_df, class_feat, pos_class, min_samples=20, require_min_samples=True, discretize=True, bin_transformer=None):
+        """ Currently experimental; Not guaranteed stable for user calls.
+            Recalibrate a Ruleset's probability estimations with unseen labeled data. May improve predict_proba accuracy.
+            Does not affect the model or which predictions it makes; only probability estimates.
+
+            Note1: RunTimeWarning is quite possible to ensure selection of desired behavior with min_samples and require_min_samples param.
+            Note2: It is possible refitting could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+
+            Xy_df <DataFrame>: labeled data
+
+            min_samples <int> (optional): required minimum number of samples per Rule
+                                          default=10. set None to ignore min sampling requirement so long as at least one sample exists.
+            require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
+                                                   False: warn, but still replace Rules that have enough samples
+            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize refit_proba's training data
+                                          default=True
+        """
+
+        # If not using min_samples, set it to 1
+        if not min_samples or min_samples < 1:
+            min_samples = 1
+
+        # Apply binning if necessary
+        if discretize and bin_transformer is not None:
+            df = Xy_df.copy()
+            df = bin_transform(df, bin_transformer)
+        else:
+            df = Xy_df
+
+        # Collect each Rule's pos and neg frequencies
+        rule_class_freqs = [None]*len(self.rules) # to contain new frequencies for each Rule
+        insufficient_rules = []
+        for i, rule in enumerate(self.rules):
+            npos_pred = num_pos(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
+            nneg_pred = num_neg(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
+            pos_neg_pred = (npos_pred, nneg_pred)
+            rule_class_freqs[i] = pos_neg_pred
+            if sum(pos_neg_pred) < min_samples:
+                insufficient_rules.append(rule)
+
+        # Collect Ruleset's uncovered frequencies
+        uncovered = df.drop(self.covers(df).index)
+        neg_freq = num_neg(uncovered, class_feat=class_feat, pos_class=pos_class)
+        fn_tn = (len(uncovered) - neg_freq, neg_freq)
+
+        if min_samples: # This will always execute b/c None min_samples is set to 1, but it's worth including the logic in case that implementation detail ever changes
+            if insufficient_rules:
+                warning_str = f'_refit_proba: param min_samples={min_samples}; insufficient number of samples from rules {insufficient_rules}'
+                warnings.warn(warning_str, RuntimeWarning)
+            if sum(fn_tn) < min_samples:
+                warning_str = f'_refit_proba: param min_samples={min_samples}; insufficient number of negatively labled samples {sum(fn_tn)}'
+                warnings.warn(warning_str, RuntimeWarning)
+            if insufficient_rules or sum(fn_tn) < min_samples:
+                if require_min_samples:
+                    warning_str = f'_refit_proba: refitting halted. to refit, try lowering min_samples or set require_min_samples to False'
+                    warnings.warn(warning_str, RuntimeWarning)
+                    return
+                else:
+                    warning_str = f'_refit_proba: retaining probabilities for rules without enough samples and because param required_min_samples=False; refitting any rules that have samples > parm min_samples={min_samples}'
+                    warnings.warn(warning_str, RuntimeWarning)
+
+        # Assign collected frequencies to Rules
+        for rule, freqs in zip(self.rules, rule_class_freqs):
+            if freqs is not None:
+                rule.class_freqs = freqs
+            else:
+                pass # ignore Rules that don't have enough samples
+
+        # Assign Ruleset's uncovered frequencies
+        self.uncovered_class_freqs = fn_tn
 
 class Rule:
     """ Class implementing conjunctions of Conds """
@@ -182,7 +260,7 @@ class Rule:
         """ Returns list of features covered by the Rule """
         return [cond.feature for cond in self.conds]
 
-    def grow(self, pos_df, neg_df, possible_conds, initial_rule=None, verbosity=0):
+    def grow(self, pos_df, neg_df, possible_conds, initial_rule=None, max_rule_conds=None, verbosity=0):
         """ Fit a new rule to add to a ruleset """
 
         if initial_rule is None:
@@ -194,7 +272,7 @@ class Rule:
             print('growing rule')
             print(rule0)
         rule1 = copy.deepcopy(rule0)
-        while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
+        while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (max_rule_conds is not None and len(rule1.conds) < max_rule_conds): # Stop refining rule if no negative examples remain or if reach user-specified max size
             rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
             if rule1 is not None:
                 rule0 = rule1
@@ -260,7 +338,7 @@ class Cond:
 ##### BASE FUNCTIONS #####
 ##########################
 
-def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), verbosity=0):
+def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), max_rule_conds=None, verbosity=0):
     """ Fit a new rule to add to a ruleset """
     # Possible optimization: remove data after each added cond?
 
@@ -269,7 +347,7 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), verbosity=0):
         print('growing rule')
         print(rule0)
     rule1 = copy.deepcopy(rule0)
-    while len(rule0.covers(neg_df)) > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
+    while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (max_rule_conds is None or len(rule1.conds) < max_rule_conds): # Stop refining rule if no negative examples remain
         rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
         #print(f'growing rule... {rule1}')
         if rule1 is not None:
@@ -573,6 +651,33 @@ def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
         pos_class = df.iloc[0][class_feat]
 
     return (df, class_feat, pos_class)
+
+def weighted_avg_freqs(counts):
+    """ Return weighted mean proportions of counts in the list
+
+        counts <list<tuple>>
+    """
+    arr = np.array(counts)
+    total = arr.flatten().sum()
+    return arr.sum(axis=0) / total
+
+def flagged_return(flags, objects):
+    result = []
+    for flag, obj in zip(flags, objects):
+        if flag:
+            result.append(obj)
+    if len(flags) > 1:
+        return tuple(result)
+    else:
+        return result
+
+def as_type(df, new_type, ignore_cols=[]):
+    result = df.copy()
+    ignore = set(ignore_cols)
+    for col in df.columns:
+        if col not in ignore:
+            result[col] = result[col].astype(new_type)
+    return result
 
 ########################################
 ##### BONUS: FUNCTIONS FOR BINNING #####

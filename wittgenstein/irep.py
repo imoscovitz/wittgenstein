@@ -11,6 +11,8 @@ import pandas as pd
 import math
 import random
 import copy
+import warnings
+import numpy as np
 
 from wittgenstein import base
 from .base import Cond, Rule, Ruleset
@@ -41,7 +43,14 @@ class IREP:
         return f'<IREP object {fitstr}>'
     __repr__ = __str__
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, random_state=None):
+    def out_model(self):
+        """ Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'. """
+        if hasattr(self,'ruleset_'):
+            self.ruleset_.out_pretty()
+        else:
+            print('no model fitted')
+
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
@@ -52,7 +61,14 @@ class IREP:
                 pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
                 n_discretize_bins (optional): Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range.
                                               Pass None to disable auto-discretization. (default=10)
+
                 random_state: (optional) random state to allow for repeatable results
+
+                options to stop early. Intended for improving model interpretability or limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
+                max_rules (optional): maximum number of rules. default=None
+                max_rule_conds (optional): maximum number of conds per rule. default=None
+                max_total_conds (optional): maximum number of total conds in entire ruleset. default=None
+
         """
 
         # Stage 0: Setup
@@ -71,12 +87,15 @@ class IREP:
         # Stage 1 (of 1): Grow Ruleset
         self.ruleset_ = Ruleset()
         self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
-            prune_size=self.prune_size, random_state=random_state)
+            prune_size=self.prune_size, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds, random_state=random_state)
         if self.verbosity >= 1:
             print()
             print('GREW RULESET:')
             self.ruleset_.out_pretty()
             print()
+
+        # Fit probas
+        self._refit_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
     def predict(self, X_df, give_reasons=False):
         """ Predict classes of data using a IREP-fit model.
@@ -123,7 +142,73 @@ class IREP:
             actuals = [yi==self.pos_class for yi in y]
         return score_function(actuals, predictions)
 
-    def _grow_ruleset(self, pos_df, neg_df, prune_size, random_state=None, verbosity=0):
+    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1):
+        """ Predict probabilities for each class using a fit Ruleset model.
+
+                args:
+                    X_df <DataFrame>: examples to make predictions on.
+
+                    give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+                    min_samples (optional) <int>: return None for each example proba that lack this many samples
+                                                  set to None to ignore. (default=None)
+
+                    give_reasons (optional) <bool>: whether to also return reasons for each prediction made.
+                    ret_n (optional) <bool>: whether to also return the number of samples used for calculating each examples proba
+
+                returns:
+                    numpy array of values corresponding to each example's classes probabilities.
+
+        """
+
+        # probas for all negative predictions
+        uncovered_proba = base.weighted_avg_freqs([self.ruleset_.uncovered_class_freqs])
+        uncovered_n = sum(self.ruleset_.uncovered_class_freqs)
+
+        # make predictions
+        predictions, covering_rules = self.predict(X_df, give_reasons=True)
+        N = []
+
+        # collect probas
+        probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
+        for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
+            n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
+            if p and (n < 1 or (min_samples and n < min_samples)):
+                probas[i, :] = None
+                N.append(n)
+            elif (not p) and (uncovered_n < 1 or uncovered_n < min_samples):
+                probas[i, :] = None
+                N.append(n)
+            elif p: # pos prediction
+                probas[i, :] = base.weighted_avg_freqs([rule.class_freqs for rule in cr])
+                N.append(n)
+            else: # neg prediction
+                probas[i, :] = uncovered_proba
+                N.append(uncovered_n)
+
+        # return probas
+        result = base.flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
+        return result
+
+    def _refit_proba(self, Xy_df, min_samples=20, require_min_samples=True, discretize=True):
+        """ Currently experimental; Not guaranteed stable for user calls.
+            Recalibrate a classifier's probability estimations with unseen labeled data.
+            Does not affect the model or which predictions it makes; only probability estimates.
+
+            Note1: RunTimeWarning is quite possible to ensure selection of desired behavior with min_samples and require_min_samples param.
+            Note2: It is possible refitting could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+
+            Xy_df <DataFrame>: labeled data
+
+            min_samples <int> (optional): required minimum number of samples per Rule
+                                          default=10. set None to ignore min sampling requirement so long as at least one sample exists.
+            require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
+                                                   False: warn, but still replace Rules that have enough samples
+            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize refit_proba's training data
+                                          default=True
+        """
+        self.ruleset_._refit_proba(Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+
+    def _grow_ruleset(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
         """ Grow a Ruleset with (optional) pruning. """
 
         ruleset = Ruleset()
@@ -133,7 +218,14 @@ class IREP:
         pos_remaining = pos_df.copy()
         neg_remaining = neg_df.copy()
         self.rules = []
-        while len(pos_remaining) > 0: # Stop adding disjunctions if there are no more positive examples to cover
+
+        # Stop adding disjunctions if there are no more positive examples to cover
+        while (len(pos_remaining) > 0):
+
+            # If applicable, check for user-specified early stopping
+            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds):
+                break
+
             # Grow-prune split remaining uncovered examples (if applicable)
             pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, (1-prune_size), random_state=random_state)
             neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, (1-prune_size), random_state=random_state)
@@ -143,7 +235,7 @@ class IREP:
                 if not prune_size: print(f'(pruning is turned off)')
 
             # Grow Rule
-            grown_rule = base.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, verbosity=self.verbosity)
+            grown_rule = base.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=max_rule_conds, verbosity=self.verbosity)
 
             # If not pruning, add Rule to Ruleset and drop only the covered positive examples
             if not prune_size:
@@ -175,6 +267,11 @@ class IREP:
                     if self.verbosity>=3:
                         print(f'examples remaining: {len(pos_remaining)} pos, {len(neg_remaining)} neg')
                         print()
+
+        # If applicable, trim total conds
+        ruleset.trim_conds(max_total_conds=max_total_conds)
+
+        # Return new ruleset
         return ruleset
 
 ##### Metric #####

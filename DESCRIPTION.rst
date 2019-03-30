@@ -11,7 +11,7 @@ This package implements two iterative coverage-based ruleset algorithms: IREP an
 
 Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/ruleset/blob/master/Performance%20Tests.ipynb)).
 
-For explanation of the algorithms, see my article in Towards Data Science, or the papers below, in _Useful References_.
+For explanation of the algorithms, see my article in _Towards Data Science_, or the papers below, under [Useful References](https://github.com/imoscovitz/wittgenstein#useful-references).
 
 ## Installation
 
@@ -33,19 +33,21 @@ Once you have loaded and split your data...
 ```python
 >>> import pandas as pd
 >>> df = pd.read_csv(dataset_filename)
->>> from sklearn.model_selection import train_test_split # or any other mechanism you want to use for data partitioning
+>>> from sklearn.model_selection import train_test_split # Or any other mechanism you want to use for data partitioning
 >>> train, test = train_test_split(df, test_size=.33)
 ```
-We can fit a ruleset classifier using RIPPER or IREP:
+We can fit a ruleset classifier using RIPPER or IREP.
 ```python
 >>> import wittgenstein as lw
 >>> ripper_clf = lw.RIPPER() # Or irep_clf = lw.IREP() to build a model using IREP
 >>> ripper_clf.fit(train, class_feat='Party') # Or call .fit with params train_X, train_y
 >>> ripper_clf
-<RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and medium post
+<RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and TDS article below
 ```
 
 Access the underlying trained model with the ruleset_ attribute. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.
+
+In other words, the model predicts positive class if any of the inner-nested condition-combinations are all true:
 ```python
 >>> ripper_clf.ruleset_
 <Ruleset object: [physician-fee-freeze=n] V [synfuels-corporation-cutback=y^adoption-of-the-budget-resolution=y^anti-satellite-test-ban=n]>
@@ -89,8 +91,9 @@ If you encounter any issues, or if you have feedback or improvement requests for
 Contributions are welcome! If you are interested in contributing, let me know at ilan.moscovitz@gmail.com or on [linkedin](https://www.linkedin.com/in/ilan-moscovitz/).
 
 ## Useful references
-- My medium post on IREP, RIPPER, and wittgenstein (coming soon)
+- [My article in _Towards Data Science_ explaining IREP, RIPPER, and wittgenstein](https://towardsdatascience.com/how-to-perform-explainable-machine-learning-classification-without-any-trees-873db4192c68)
 - [Furnkrantz-Widmer IREP paper](https://pdfs.semanticscholar.org/f67e/bb7b392f51076899f58c53bf57d5e71e36e9.pdf)
 - [Cohen's RIPPER paper](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.107.2612&rep=rep1&type=pdf)
 - [Partial decision trees](https://researchcommons.waikato.ac.nz/bitstream/handle/10289/1047/uow-cs-wp-1998-02.pdf?sequence=1&isAllowed=y)
+- [Bayesian Rulesets](https://pdfs.semanticscholar.org/bb51/b3046f6ff607deb218792347cb0e9b0b621a.pdf)
 - [C4.5 paper including all the gory details on MDL](https://pdfs.semanticscholar.org/cb94/e3d981a5e1901793c6bfedd93ce9cc07885d.pdf)

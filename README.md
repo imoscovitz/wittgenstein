@@ -25,6 +25,10 @@ To uninstall, use
 $ pip uninstall wittgenstein
 ```
 
+## Requirements
+- pandas
+- numpy
+
 ## Usage
 
 Usage syntax is similar to sklearn's. The current version, however, does require that data be passed in as a Pandas DataFrame.
