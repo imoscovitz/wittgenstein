@@ -9,6 +9,7 @@ import warnings
 from numpy import var, mean
 import time
 
+
 class Ruleset:
     """ Base Ruleset model.
         Implements collection of Rules in disjunctive normal form.
@@ -92,7 +93,14 @@ class Ruleset:
     def add(self, rule):
         self.rules.append(rule)
 
+    def count_rules(self):
+        """ Returns number of rules in the Ruleset.
+            (For ease of use for users who don't make a habit of directly accessing the Ruleset object.)
+        """
+        return len(self.rules)
+
     def count_conds(self):
+        """ Returns the total number of conditions in the Ruleset. This is a measurement of complexity that's the conceptual equivalent of counting the nodes in a decision tree. """
         return sum([len(r.conds) for r in self.rules])
 
     def _set_possible_conds(self, pos_df, neg_df):
@@ -143,13 +151,66 @@ class Ruleset:
                 reasons.append(example_reasons)
             return (predictions, reasons)
 
-    def _refit_proba(self, Xy_df, class_feat, pos_class, min_samples=20, require_min_samples=True, discretize=True, bin_transformer=None):
-        """ Currently experimental; Not guaranteed stable for user calls.
-            Recalibrate a Ruleset's probability estimations with unseen labeled data. May improve predict_proba accuracy.
-            Does not affect the model or which predictions it makes; only probability estimates.
+    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1, discretize=True, bin_transformer=None):
+        """ Predict probabilities for each class using a fit Ruleset model.
 
-            Note1: RunTimeWarning is quite possible to ensure selection of desired behavior with min_samples and require_min_samples param.
-            Note2: It is possible refitting could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+                args:
+                    X_df <DataFrame>: examples to make predictions on.
+
+                    give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+                    min_samples (optional) <int>: return None for each example proba that lack this many samples
+                                                  set to None to ignore. (default=None)
+
+                    give_reasons (optional) <bool>: whether to also return reasons for each prediction made.
+                    ret_n (optional) <bool>: whether to also return the number of samples used for calculating each examples proba
+
+                returns:
+                    numpy array of values corresponding to each example's classes probabilities, or, if give_reasons or ret_n, a tuple containing proba array and list(s) of desired returns
+
+        """
+
+        # Apply binning if necessary
+        if discretize and bin_transformer is not None:
+            df = X_df.copy()
+            df = bin_transform(df, bin_transformer)
+        else:
+            df = X_df
+
+        # probas for all negative predictions
+        uncovered_proba = weighted_avg_freqs([self.uncovered_class_freqs])
+        uncovered_n = sum(self.uncovered_class_freqs)
+
+        # make predictions
+        predictions, covering_rules = self.predict(df, give_reasons=True)
+        N = []
+
+        # collect probas
+        probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
+        for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
+            n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
+            if p and (n < 1 or (min_samples and n < min_samples)):
+                probas[i, :] = None
+                N.append(n)
+            elif (not p) and (uncovered_n < 1 or uncovered_n < min_samples):
+                probas[i, :] = None
+                N.append(n)
+            elif p: # pos prediction
+                probas[i, :] = weighted_avg_freqs([rule.class_freqs for rule in cr])
+                N.append(n)
+            else: # neg prediction
+                probas[i, :] = uncovered_proba
+                N.append(uncovered_n)
+
+        # return probas (and optional extras)
+        result = flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
+        return result
+
+    def recalibrate_proba(self, Xy_df, class_feat, pos_class, min_samples=20, require_min_samples=True, discretize=True, bin_transformer=None):
+        """ Recalibrate a Ruleset's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
+            Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
+
+            Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
+            Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
             Xy_df <DataFrame>: labeled data
 
@@ -157,7 +218,7 @@ class Ruleset:
                                           default=10. set None to ignore min sampling requirement so long as at least one sample exists.
             require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
                                                    False: warn, but still replace Rules that have enough samples
-            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize refit_proba's training data
+            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize recalibrate_proba's training data
                                           default=True
         """
 
@@ -190,18 +251,18 @@ class Ruleset:
 
         if min_samples: # This will always execute b/c None min_samples is set to 1, but it's worth including the logic in case that implementation detail ever changes
             if insufficient_rules:
-                warning_str = f'_refit_proba: param min_samples={min_samples}; insufficient number of samples from rules {insufficient_rules}'
+                warning_str = f'recalibrate_proba: param min_samples={min_samples}; insufficient number of samples from rules {insufficient_rules}'
                 warnings.warn(warning_str, RuntimeWarning)
             if sum(fn_tn) < min_samples:
-                warning_str = f'_refit_proba: param min_samples={min_samples}; insufficient number of negatively labled samples {sum(fn_tn)}'
+                warning_str = f'recalibrate_proba: param min_samples={min_samples}; insufficient number of negatively labled samples {sum(fn_tn)}'
                 warnings.warn(warning_str, RuntimeWarning)
             if insufficient_rules or sum(fn_tn) < min_samples:
                 if require_min_samples:
-                    warning_str = f'_refit_proba: refitting halted. to refit, try lowering min_samples or set require_min_samples to False'
+                    warning_str = f'recalibrate_proba: recalibrating halted. to recalibrate, try lowering min_samples or set require_min_samples to False'
                     warnings.warn(warning_str, RuntimeWarning)
                     return
                 else:
-                    warning_str = f'_refit_proba: retaining probabilities for rules without enough samples and because param required_min_samples=False; refitting any rules that have samples > parm min_samples={min_samples}'
+                    warning_str = f'recalibrate_proba: retaining probabilities for rules without enough samples and because param required_min_samples=False; recalibrate any rules that have samples > parm min_samples={min_samples}'
                     warnings.warn(warning_str, RuntimeWarning)
 
         # Assign collected frequencies to Rules
@@ -248,7 +309,7 @@ class Rule:
 
     def covers(self, df):
         """ Returns instances covered by the Rule. """
-        covered = df.copy()
+        covered = df.head(len(df))
         for cond in self.conds:
             covered = cond.covers(covered)
         return covered
@@ -259,33 +320,6 @@ class Rule:
     def covered_feats(self):
         """ Returns list of features covered by the Rule """
         return [cond.feature for cond in self.conds]
-
-    def grow(self, pos_df, neg_df, possible_conds, initial_rule=None, max_rule_conds=None, verbosity=0):
-        """ Fit a new rule to add to a ruleset """
-
-        if initial_rule is None:
-            rule0 = Rule()
-        else:
-            rule0 = copy.deepcopy(initial_rule)
-
-        if verbosity>=4:
-            print('growing rule')
-            print(rule0)
-        rule1 = copy.deepcopy(rule0)
-        while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (max_rule_conds is not None and len(rule1.conds) < max_rule_conds): # Stop refining rule if no negative examples remain or if reach user-specified max size
-            rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
-            if rule1 is not None:
-                rule0 = rule1
-                if verbosity>=4:
-                    print(f'negs remaining {len(rule0.covers(neg_df))}')
-
-        if not rule0.isempty():
-            if verbosity>=3: print(f'grew rule: {rule0}')
-        else:
-            #warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
-            pass
-
-        self = rule0
 
     #############################################
     ##### Rule::grow/prune helper functions #####
@@ -307,7 +341,7 @@ class Rule:
             successor_rules = []
             for feat in pos_df.columns.values:
                 for val in set(pos_df[feat].unique()).intersection(set(neg_df[feat].unique())):
-                    if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors
+                    if feat not in self.covered_feats(): # Conds already in Rule and Conds that contradict Rule aren't valid successors / NB Rules are short; this is unlikely to be worth the overhead of cheacking
                         successor_rules.append(self+Cond(feat, val))
             return successor_rules
 
@@ -327,10 +361,13 @@ class Cond:
     def __eq__(self, other):
         return self.feature == other.feature and self.val == other.val
 
+    def __hash__(self):
+        return hash((self.feature, self.val))
+
     def covers(self, df):
         """ Returns instances covered by the Cond (i.e. those which are not in contradiction with it). """
         return df[df[self.feature]==self.val]
-        #return [(Xi, yi) for Xi, yi in zip(X, y) if Xi[self.feat_index  ]==self.val]
+
     def num_covered(self, df):
         return len(self.covers(df))
 
@@ -342,10 +379,12 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), max_rule_cond
     """ Fit a new rule to add to a ruleset """
     # Possible optimization: remove data after each added cond?
 
+    #print('grow_rule original')
+
     rule0 = copy.deepcopy(initial_rule)
     if verbosity>=4:
-        print('growing rule')
-        print(rule0)
+        print(f'growing rule from initial rule: {rule0}')
+
     rule1 = copy.deepcopy(rule0)
     while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (max_rule_conds is None or len(rule1.conds) < max_rule_conds): # Stop refining rule if no negative examples remain
         rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
@@ -462,13 +501,13 @@ class Timer:
     ##### METRICS #####
     ###################
 
-def gain(self, other, pos_df, neg_df):
+def gain(before, after, pos_df, neg_df):
     """ Returns the information gain from self to other """
 
-    p0count = self.num_covered(pos_df)
-    p1count = other.num_covered(pos_df)
-    n0count = self.num_covered(neg_df)
-    n1count = other.num_covered(neg_df)
+    p0count = before.num_covered(pos_df)
+    p1count = after.num_covered(pos_df)
+    n0count = before.num_covered(neg_df)
+    n1count = after.num_covered(neg_df)
     return p1count * (math.log2((p1count + 1) / (p1count + n1count + 1)) - math.log2((p0count + 1) / (p0count + n0count + 1)))
 
 def precision(object, pos_df, neg_df):
@@ -662,14 +701,14 @@ def weighted_avg_freqs(counts):
     return arr.sum(axis=0) / total
 
 def flagged_return(flags, objects):
-    result = []
-    for flag, obj in zip(flags, objects):
-        if flag:
-            result.append(obj)
-    if len(flags) > 1:
-        return tuple(result)
+    """ Returns only objects with corresponding True flags
+        Useful when """
+    if sum(flags)==1:
+        return objects[0]
+    elif sum(flags)>1:
+        return tuple([object for flag, object in zip(flags, objects) if flag])
     else:
-        return result
+        return ()
 
 def as_type(df, new_type, ignore_cols=[]):
     result = df.copy()
@@ -765,8 +804,7 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
     fit_dict = {}
     feats_to_fit = find_numeric_feats(df,ignore_feats=ignore_feats)
     if verbosity==2: print(f'fitting bins for features {feats_to_fit}')
-    if verbosity>=2:
-        print()
+    if verbosity>=2: print()
 
     # Collect fits in dict
     count=1

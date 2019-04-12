@@ -179,7 +179,7 @@ class RIPPER:
             print()
 
         # Fit probas
-        self._refit_proba(df, min_samples=None, require_min_samples=False, discretize=False)
+        self.recalibrate_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
     def predict(self, X_df, give_reasons=False):
         """ Predict classes of data using a RIPPER-fit model.
@@ -227,59 +227,16 @@ class RIPPER:
         return score_function(actuals, predictions)
 
     def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1):
-        """ Predict probabilities for each class using a fit Ruleset model.
+        # Drop class feature if user forgot to:
+        df = X_df if self.class_feat not in X_df.columns else X_df.drop(self.class_feat, axis=1)
+        return self.ruleset_.predict_proba(df, give_reasons=give_reasons, ret_n=ret_n, min_samples=min_samples, discretize=True, bin_transformer=self.bin_transformer_)
 
-                args:
-                    X_df <DataFrame>: examples to make predictions on.
+    def recalibrate_proba(self, Xy_df, min_samples=20, require_min_samples=True, discretize=True):
+        """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
+            Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
-                    give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
-                    min_samples (optional) <int>: return None for each example proba that lack this many samples
-                                                  set to None to ignore. (default=None)
-
-                    give_reasons (optional) <bool>: whether to also return reasons for each prediction made.
-                    ret_n (optional) <bool>: whether to also return the number of samples used for calculating each examples proba
-
-                returns:
-                    numpy array of values corresponding to each example's classes probabilities.
-
-        """
-
-        # probas for all negative predictions
-        uncovered_proba = base.weighted_avg_freqs([self.ruleset_.uncovered_class_freqs])
-        uncovered_n = sum(self.ruleset_.uncovered_class_freqs)
-
-        # make predictions
-        predictions, covering_rules = self.predict(X_df, give_reasons=True)
-        N = []
-
-        # collect probas
-        probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
-        for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
-            n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
-            if p and (n < 1 or (min_samples and n < min_samples)):
-                probas[i, :] = None
-                N.append(n)
-            elif (not p) and (uncovered_n < 1 or uncovered_n < min_samples):
-                probas[i, :] = None
-                N.append(n)
-            elif p: # pos prediction
-                probas[i, :] = base.weighted_avg_freqs([rule.class_freqs for rule in cr])
-                N.append(n)
-            else: # neg prediction
-                probas[i, :] = uncovered_proba
-                N.append(uncovered_n)
-
-        # return probas
-        result = base.flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
-        return result
-
-    def _refit_proba(self, Xy_df, min_samples=20, require_min_samples=True, discretize=True):
-        """ Currently experimental; Not guaranteed stable for user calls.
-            Recalibrate a classifier's probability estimations with unseen labeled data.
-            Does not affect the model or which predictions it makes; only probability estimates.
-
-            Note1: RunTimeWarning is quite possible to ensure selection of desired behavior with min_samples and require_min_samples param.
-            Note2: It is possible refitting could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+            Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
+            Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
             Xy_df <DataFrame>: labeled data
 
@@ -287,10 +244,12 @@ class RIPPER:
                                           default=10. set None to ignore min sampling requirement so long as at least one sample exists.
             require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
                                                    False: warn, but still replace Rules that have enough samples
-            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize refit_proba's training data
+            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize recalibrate_proba's training data
                                           default=True
         """
-        self.ruleset_._refit_proba(Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+
+        # Recalibrate
+        self.ruleset_.recalibrate_proba(Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
         """ Precalculate rule theory dls for various-sized rules. """
@@ -487,9 +446,9 @@ class RulesetStats:
     # This class is not used in the current implementation but could come in handy for future optimization
     # by storing and retreiving calculations that may be repeated.
     # Haven't incorporated it because there are bigger fish to fry, optimization-wise.
-    def __init__(self):
+    def __init__(self, ruleset=None):
         self.subset_dls = []
-        self.ruleset = Ruleset()
+        self.ruleset = Ruleset() if ruleset is None else ruleset
         self.dl = 0
 
     def update(self, ruleset, possible_conds, pos_df, neg_df, verbosity=0):
