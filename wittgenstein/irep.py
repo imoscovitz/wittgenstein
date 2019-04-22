@@ -17,7 +17,7 @@ import numpy as np
 #from wittgenstein import base, base_functions
 #import base
 #import base_functions
-import wittgenstein.base, wittgenstein.base_functions
+from wittgenstein import base, base_functions
 from .base import Cond, Rule, Ruleset, bin_df
 from .base_functions import rnd, score_accuracy#, bin_df
 
