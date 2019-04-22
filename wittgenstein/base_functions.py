@@ -557,7 +557,7 @@ def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
     if (class_feat in df.columns) and (pos_class is not None) and (len(df[df[class_feat]==pos_class])==0):
         raise ValueError(f'DataFrame df class feature {class_feat} does not contain any members of positive class {pos_class}')
 
-    if (y) and (pos_class is not None) and not ([val for val in y if val==pos_class]):
+    if (y is not None) and (pos_class is not None) and not ([val for val in y if val==pos_class]):
         raise ValueError(f'y does not contain any members of positive class {pos_class}')
 
     # Ensure no class feature name mismatch

@@ -99,7 +99,7 @@ class RIPPER:
 
         # CatNap optimization:
         if cn_optimize:
-            self.cn = CatNap(df.drop(class_feat, axis=1), feat_subset=None, cond_subset=None, class_feat=None, pos_class=None)
+            self.cn = CatNap(df, feat_subset=None, cond_subset=None, class_feat=self.class_feat, pos_class=None)
 
         # Collect possible conds
         self._set_possible_conds(df)

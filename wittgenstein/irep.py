@@ -94,7 +94,7 @@ class IREP:
         # Create CatNap
         # possible minor speedup if pass cond_subset of only pos_class conds?
         if cn_optimize:
-            self.cn = CatNap(df.drop(class_feat, axis=1), feat_subset=None, cond_subset=None, class_feat=None, pos_class=None)
+            self.cn = CatNap(df, feat_subset=None, cond_subset=None, class_feat=self.class_feat, pos_class=None)
 
         # Stage 1 (of 1): Grow Ruleset
         self.ruleset_ = Ruleset()
