@@ -6,8 +6,12 @@ tests/__init__.py
 tests/test_base.py
 wittgenstein/__init__.py
 wittgenstein/base.py
+wittgenstein/base_functions.py
+wittgenstein/catnap.py
 wittgenstein/irep.py
+wittgenstein/metrics.py
 wittgenstein/ripper.py
+wittgenstein/untitled.py
 wittgenstein/wittgenstein.py
 wittgenstein.egg-info/PKG-INFO
 wittgenstein.egg-info/SOURCES.txt

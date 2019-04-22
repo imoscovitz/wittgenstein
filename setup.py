@@ -1,10 +1,11 @@
 import setuptools
 setuptools.setup(
   name = 'wittgenstein',
-  version = '0.1.5',
+  version = '0.1.6',
   license='MIT',
   description = 'Ruleset covering algorithms for explainable machine learning',
-  long_description=open('DESCRIPTION.rst').read(),
+  long_description=open('README.md').read(),
+  long_description_content_type="text/markdown",
   author = 'Ilan Moscovitz',
   author_email = 'ilan.moscovitz@gmail.com',
   url = 'https://github.com/imoscovitz/wittgenstein',

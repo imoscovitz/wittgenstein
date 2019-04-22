@@ -1,6 +1,6 @@
-Metadata-Version: 1.1
+Metadata-Version: 2.1
 Name: wittgenstein
-Version: 0.1.5
+Version: 0.1.6
 Summary: Ruleset covering algorithms for explainable machine learning
 Home-page: https://github.com/imoscovitz/wittgenstein
 Author: Ilan Moscovitz
@@ -8,7 +8,7 @@ Author-email: ilan.moscovitz@gmail.com
 License: MIT
 Description: # wittgenstein
         
-        _And is there not also the case where we play and--make up the rules as we go along?
+        _And is there not also the case where we play and--make up the rules as we go along?  
           -Ludwig Wittgenstein_
         
         ![the duck-rabbit](https://github.com/imoscovitz/wittgenstein/blob/master/duck-rabbit.jpg)
@@ -32,6 +32,10 @@ Description: # wittgenstein
         ```bash
         $ pip uninstall wittgenstein
         ```
+        
+        ## Requirements
+        - pandas
+        - numpy
         
         ## Usage
         
@@ -105,9 +109,11 @@ Description: # wittgenstein
         - [Partial decision trees](https://researchcommons.waikato.ac.nz/bitstream/handle/10289/1047/uow-cs-wp-1998-02.pdf?sequence=1&isAllowed=y)
         - [Bayesian Rulesets](https://pdfs.semanticscholar.org/bb51/b3046f6ff607deb218792347cb0e9b0b621a.pdf)
         - [C4.5 paper including all the gory details on MDL](https://pdfs.semanticscholar.org/cb94/e3d981a5e1901793c6bfedd93ce9cc07885d.pdf)
+        - [_Philosophical Investigations_](https://static1.squarespace.com/static/54889e73e4b0a2c1f9891289/t/564b61a4e4b04eca59c4d232/1447780772744/Ludwig.Wittgenstein.-.Philosophical.Investigations.pdf)
         
 Keywords: Classification,Decision Rule,Machine Learning,Explainable Machine Learning,Data Science
 Platform: UNKNOWN
 Classifier: Programming Language :: Python
 Classifier: Programming Language :: Python :: 3.6
 Classifier: Programming Language :: Python :: 3.7
+Description-Content-Type: text/markdown

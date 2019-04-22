@@ -14,9 +14,14 @@ import copy
 import warnings
 import numpy as np
 
-from wittgenstein import base
-from .base import Cond, Rule, Ruleset
-from .base import rnd, score_accuracy, bin_df
+#from wittgenstein import base, base_functions
+#import base
+#import base_functions
+import wittgenstein.base, wittgenstein.base_functions
+from .base import Cond, Rule, Ruleset, bin_df
+from .base_functions import rnd, score_accuracy#, bin_df
+
+from .catnap import CatNap
 
 class IREP:
     """ Class for generating ruleset classification models. """
@@ -50,7 +55,9 @@ class IREP:
         else:
             print('no model fitted')
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None):
+    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10,
+            max_rules=None, max_rule_conds=None, max_total_conds=None,
+            cn_optimize=True, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
 
             args:
@@ -74,20 +81,30 @@ class IREP:
         # Stage 0: Setup
 
         # Set up trainset, set class feature name, and set pos class name
-        df, self.class_feat, self.pos_class = base.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
+        df, self.class_feat, self.pos_class = base_functions.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
 
         # Anything to discretize?
         df, self.bin_transformer_ = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=[self.class_feat], verbosity=self.verbosity)
 
         # Split df into pos, neg classes
-        pos_df, neg_df = base.pos_neg_split(df, self.class_feat, self.pos_class)
+        pos_df, neg_df = base_functions.pos_neg_split(df, self.class_feat, self.pos_class)
         pos_df = pos_df.drop(self.class_feat,axis=1)
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
+        # Create CatNap
+        # possible minor speedup if pass cond_subset of only pos_class conds?
+        if cn_optimize:
+            self.cn = CatNap(df.drop(class_feat, axis=1), feat_subset=None, cond_subset=None, class_feat=None, pos_class=None)
+
         # Stage 1 (of 1): Grow Ruleset
         self.ruleset_ = Ruleset()
-        self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
+        if not cn_optimize:
+            self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
             prune_size=self.prune_size, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds, random_state=random_state)
+        else:
+            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df,
+            prune_size=self.prune_size, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds, random_state=random_state)
+
         if self.verbosity >= 1:
             print()
             print('GREW RULESET:')
@@ -165,7 +182,7 @@ class IREP:
         """
 
         # Recalibrate
-        self.ruleset_.recalibrate_proba(Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+        base_functions.recalibrate_proba(self.ruleset_, Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
 
     def _grow_ruleset(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
         """ Grow a Ruleset with (optional) pruning. """
@@ -186,15 +203,15 @@ class IREP:
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
-            pos_growset, pos_pruneset = base.df_shuffled_split(pos_remaining, (1-prune_size), random_state=random_state)
-            neg_growset, neg_pruneset = base.df_shuffled_split(neg_remaining, (1-prune_size), random_state=random_state)
+            pos_growset, pos_pruneset = base_functions.df_shuffled_split(pos_remaining, (1-prune_size), random_state=random_state)
+            neg_growset, neg_pruneset = base_functions.df_shuffled_split(neg_remaining, (1-prune_size), random_state=random_state)
             if self.verbosity>=2:
                 print(f'pos_growset {len(pos_growset)} pos_pruneset {len(pos_pruneset)}')
                 print(f'neg_growset {len(neg_growset)} neg_pruneset {len(neg_pruneset)}')
                 if not prune_size: print(f'(pruning is turned off)')
 
             # Grow Rule
-            grown_rule = base.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=max_rule_conds, verbosity=self.verbosity)
+            grown_rule = base_functions.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=max_rule_conds, verbosity=self.verbosity)
 
             # If not pruning, add Rule to Ruleset and drop only the covered positive examples
             if not prune_size:
@@ -210,10 +227,10 @@ class IREP:
 
             # If pruning, prune Rule, assess if it's time to stop, and drop all covered examples
             else:
-                pruned_rule = base.prune_rule(grown_rule, _IREP_prune_metric, pos_pruneset, neg_pruneset, verbosity=self.verbosity)
+                pruned_rule = base_functions.prune_rule(grown_rule, _IREP_prune_metric, pos_pruneset, neg_pruneset, verbosity=self.verbosity)
 
                 # Stop if the Rule is bad
-                prune_precision = base.precision(pruned_rule, pos_pruneset, neg_pruneset)
+                prune_precision = base_functions.precision(pruned_rule, pos_pruneset, neg_pruneset)
                 if not prune_precision or prune_precision < .50:
                     break
                 # Otherwise, add new Rule, remove covered examples, and continue
@@ -222,9 +239,80 @@ class IREP:
                     if self.verbosity>=2:
                         print(f"updated ruleset: {ruleset.truncstr(direction='right')}")
                         print()
-                    pos_remaining, neg_remaining = base.rm_covered(pruned_rule, pos_remaining, neg_remaining)
+                    pos_remaining, neg_remaining = base_functions.rm_covered(pruned_rule, pos_remaining, neg_remaining)
                     if self.verbosity>=3:
                         print(f'examples remaining: {len(pos_remaining)} pos, {len(neg_remaining)} neg')
+                        print()
+
+        # If applicable, trim total conds
+        ruleset.trim_conds(max_total_conds=max_total_conds)
+
+        # Return new ruleset
+        return ruleset
+
+    def _grow_ruleset_cn(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
+        """ Grow a Ruleset with (optional) pruning. """
+
+        ruleset = Ruleset()
+        ruleset.possible_conds = self.cn.conds
+        #ruleset._set_possible_conds(pos_df, neg_df)
+
+        if not prune_size: prune_size = 0 # If not pruning, use all the data for growing
+        pos_remaining_idx = set(pos_df.index.tolist())
+        neg_remaining_idx = set(neg_df.index.tolist())
+        #self.rules = []
+
+        # Stop adding disjunctions if there are no more positive examples to cover
+        while (len(pos_remaining_idx) > 0):
+
+            # If applicable, check for user-specified early stopping
+            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds):
+                break
+
+            # Grow-prune split remaining uncovered examples (if applicable)
+            pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(pos_remaining_idx, (1-prune_size), random_state=random_state)
+            neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(neg_remaining_idx, (1-prune_size), random_state=random_state)
+            #print('pos_growset')
+            #print(sorted(list(pos_growset_idx)))
+            #print('neg_growset')
+            #print(sorted(list(neg_growset_idx)))
+            if self.verbosity>=2:
+                print(f'pos_growset {len(pos_growset_idx)} pos_pruneset {len(pos_pruneset_idx)}')
+                print(f'neg_growset {len(neg_growset_idx)} neg_pruneset {len(neg_pruneset_idx)}')
+                if not prune_size: print(f'(pruning is turned off)')
+
+            # Grow Rule
+            grown_rule = base_functions.grow_rule_cn(self.cn, pos_growset_idx, neg_growset_idx, initial_rule=Rule(), max_rule_conds=max_rule_conds, verbosity=self.verbosity)
+
+            # If not pruning, add Rule to Ruleset and drop only the covered positive examples
+            if not prune_size:
+                ruleset.add(grown_rule)
+                if self.verbosity>=2:
+                    print(f"updated ruleset: {ruleset.truncstr(direction='right')}")
+                    print()
+                pos_remaining_idx = pos_remaining_idx - cn.rule_covers(grown_rule, pos_remaining_idx)
+                if self.verbosity>=3:
+                    print(f'examples remaining: {len(pos_remaining_idx)} pos, {len(neg_remaining_idx)} neg')
+                    print()
+
+            # If pruning, prune Rule, assess if it's time to stop, and drop all covered examples
+            else:
+                pruned_rule = base_functions.prune_rule_cn(self.cn, grown_rule, _IREP_prune_metric_cn, pos_pruneset_idx, neg_pruneset_idx, verbosity=self.verbosity)
+
+                # Stop if the Rule is bad
+                prune_precision = base_functions.rule_precision_cn(self.cn, pruned_rule, pos_pruneset_idx, neg_pruneset_idx)
+                if not prune_precision or prune_precision < .50:
+                    break
+                # Otherwise, add new Rule, remove covered examples, and continue
+                else:
+                    ruleset.add(pruned_rule)
+                    if self.verbosity>=2:
+                        print(f"updated ruleset: {ruleset.truncstr(direction='right')}")
+                        print()
+                    # Remove ruleset-covered rules from training
+                    pos_remaining_idx, neg_remaining_idx = base_functions.rm_rule_covers_cn(self.cn, pruned_rule, pos_remaining_idx, neg_remaining_idx)
+                    if self.verbosity>=3:
+                        print(f'examples remaining: {len(pos_remaining_idx)} pos, {len(neg_remaining_idx)} neg')
                         print()
 
         # If applicable, trim total conds
@@ -242,4 +330,13 @@ def _IREP_prune_metric(self, pos_pruneset, neg_pruneset):
     N = len(neg_pruneset)
     p = self.num_covered(pos_pruneset)
     n = self.num_covered(neg_pruneset)
+    return (p+(N - n)) / (P + N)
+
+def _IREP_prune_metric_cn(cn, rule, pos_idxs, neg_idxs):
+    """ Returns the prune value of a candidate Rule """
+
+    P = len(pos_idxs)
+    N = len(neg_idxs)
+    p = len(cn.rule_covers(rule, pos_idxs))
+    n = len(cn.rule_covers(rule, neg_idxs))
     return (p+(N - n)) / (P + N)
