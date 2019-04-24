@@ -1,4 +1,4 @@
-from wittgenstein.base import Cond, Rule, Ruleset, bin_df
+from wittgenstein.base import Cond, Rule, Ruleset, bin_df, rnd
 from wittgenstein.catnap import CatNap
 
 import math
@@ -42,25 +42,15 @@ def grow_rule_cn(cn, pos_idx, neg_idx, initial_rule=Rule(), max_rule_conds=None,
     """ Fit a new rule to add to a ruleset """
     # Possible optimization: remove data after each added cond?
 
-    #print(f'neg_idx {neg_idx}')
     rule0 = copy.deepcopy(initial_rule)
     rule1 = copy.deepcopy(rule0)
     if verbosity>=4:
         print(f'growing rule from initial rule: {rule0}')
 
-    #print(f'cn {cn}')
-    #print(f'negs:')
     num_neg_covered = len(cn.rule_covers(rule0, subset=neg_idx))
-    #print(f'num negs {num_neg_covered}')
-
     user_halt = (max_rule_conds is not None and len(rule1.conds) >= max_rule_conds)
     while num_neg_covered > 0: # Stop refining rule if no negative examples remain
-        #print('pos idx:')
-        #print(pos_idx)
-        #print('grow_rule_cn pos_idx')
-        #print(pos_idx)
         rule1 = best_rule_successor_cn(cn, rule0, pos_idx, neg_idx, verbosity=verbosity)
-        #print(f'growing rule... {rule1}')
         if rule1 is None: break
         rule0 = rule1
         num_neg_covered = len(cn.rule_covers(rule0, neg_idx))
@@ -201,9 +191,8 @@ def prune_rule_cn(cn, rule, prune_metric_cn, pos_idx, neg_idx, eval_index_on_rul
         best_v = 0
 
         # Iteratively prune and test rule over ruleset.
-        # This is unfortunately expensive.
         while current_rule.conds:
-            v = prune_metric(current_ruleset, pos_pruneset, neg_pruneset)
+            v = prune_metric_cn(cn, current_rule, pos_idx, neg_idx)
             if verbosity>=5: print(f'prune value of {current_rule}: {rnd(v)}')
             if v is None:
                 return None
@@ -312,20 +301,16 @@ def gain(before, after, pos_df, neg_df):
 
 def gain_cn(cn, cond_step, rule_covers_pos_idx, rule_covers_neg_idx):
     """ Returns the information gain from self to other """
-    #print('rule_covers_pos_idx')
-    #print(rule_covers_pos_idx)
+    #print('gain_cn', len(rule_covers_pos_idx), len(rule_covers_neg_idx))
+
     p0count = len(rule_covers_pos_idx)
     p1count = len(cn.cond_covers(cond_step, subset=rule_covers_pos_idx))
     n0count = len(rule_covers_neg_idx)
     n1count = len(cn.cond_covers(cond_step, subset=rule_covers_neg_idx))
-    #print(p0count, p1count, n0count, n1count)
-    #print(sorted(list(rule_covers_pos_idx)))
-    #print(sorted(list(cn.cond_covers(cond_step, subset=rule_covers_pos_idx))))
-    #print(sorted(list(rule_covers_neg_idx)))
-    #print(sorted(list(cn.cond_covers(cond_step, subset=rule_covers_neg_idx))))
-    #print()
-    return p1count * (math.log2((p1count + 1) / (p1count + n1count + 1)) - math.log2((p0count + 1) / (p0count + n0count + 1)))
-
+    g = p1count * (math.log2((p1count + 1) / (p1count + n1count + 1)) - math.log2((p0count + 1) / (p0count + n0count + 1)))
+    #if p1count > p0count or n1count > n0count:
+    #    print(cond_step, p0count, p1count, n0count, n1count, rnd(g))
+    return g
 def precision(object, pos_df, neg_df):
     """ Returns precision value of object's classification.
         object: Cond, Rule, or Ruleset
@@ -401,33 +386,16 @@ def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
     if verbosity>=5: print(f'gain {rnd(best_gain)} {best_successor_rule}')
     return best_successor_rule
 
-# class Rule?:
 # Can possibly further optimize by not rechecking rule each time but just cond
 def best_rule_successor_cn(cn, rule, pos_idx, neg_idx, verbosity=0):
     best_cond = None
     best_gain = float('-inf')
-    #print('best_rule_successor_cn rule')
-    #print(rule)
-    #print('pos_idx')
-    #print(pos_idx)
-    #print('neg_idx')
-    #print(neg_idx)
+
     rule_covers_pos_idx = cn.rule_covers(rule, pos_idx)
     rule_covers_neg_idx = cn.rule_covers(rule, neg_idx)
-    #print('best_rule_successor_cn rule_covers_pos_idx')
-    #print(rule_covers_pos_idx)
-    #print('pos')
-    #print(pos_idx)
-    #print(f'pos covered:')
-    #print(rule_covers_pos_idx)
 
     for cond_action_step in cn.conds:
-        #print('best_rule_successor_cn rule_covers_pos_idx')
-        #print(rule_covers_pos_idx)
-        #print('all')
-        #print(cn.all)
         g = gain_cn(cn, cond_action_step, rule_covers_pos_idx, rule_covers_neg_idx)
-        #print(f'{cond_action_step}: {g}')
         if g > best_gain:
             best_gain = g
             best_cond = cond_action_step
@@ -498,23 +466,6 @@ def nCr(n, r):
     num = product(range(n, n-r, -1))
     den = product(range(1, r+1))
     return num//den
-
-def rnd(float, places='default'):
-    """ places: number of decimal places to round.
-                set to 'default': defaults to 1 decimal place if float < 100, otherwise defaults to 0 places
-    """
-    if places=='default':
-        if float<1:
-            places = 2
-        elif float<100:
-            places = 1
-        else:
-            places = 0
-    rounded = round(float, places)
-    if rounded!=int(rounded):
-        return rounded
-    else:
-        return int(rounded)
 
 def argmin(list_):
     """ Returns index of minimum value. """

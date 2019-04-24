@@ -293,6 +293,7 @@ class Cond:
 
     def covers(self, df):
         """ Returns instances covered by the Cond (i.e. those which are not in contradiction with it). """
+        #print(f'{self} covers')
         return df[df[self.feature]==self.val]
 
     def num_covered(self, df):
@@ -485,3 +486,20 @@ def flagged_return(flags, objects):
         return tuple([object for flag, object in zip(flags, objects) if flag])
     else:
         return ()
+
+def rnd(float, places='default'):
+    """ places: number of decimal places to round.
+                set to 'default': defaults to 1 decimal place if float < 100, otherwise defaults to 0 places
+    """
+    if places=='default':
+        if float<1:
+            places = 2
+        elif float<100:
+            places = 1
+        else:
+            places = 0
+    rounded = round(float, places)
+    if rounded!=int(rounded):
+        return rounded
+    else:
+        return int(rounded)

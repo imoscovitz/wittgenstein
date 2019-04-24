@@ -1,3 +1,4 @@
+import pandas as pd
 from .base import Cond, Rule, Ruleset
 
 class CatNap:
@@ -26,25 +27,25 @@ class CatNap:
         return f'<CatNap object: {self.num_conds} Conds covering {self.num_idx} examples>'
     __repr__ = __str__
 
-    def cond_covers(self, cond, subset={}):
+    def cond_covers(self, cond, subset=None):
         return self.cond_maps.get(cond) \
-            if not subset else self.cond_maps.get(cond).intersection(subset)
+            if subset is None else self.cond_maps.get(cond).intersection(subset)
 
-    def conj(self, conds, subset={}):
+    def conj(self, conds, subset=None):
         return set.intersection(*[self.cond_maps.get(c) for c in conds]) \
-            if not subset else set.intersection(*[self.cond_maps.get(c) for c in conds]).intersection(subset)
+            if subset is None else set.intersection(*[self.cond_maps.get(c) for c in conds]).intersection(subset)
 
-    def rule_covers(self, rule, subset={}): # Same as conj
+    def rule_covers(self, rule, subset=None): # Same as conj
         # Is there a cleaner way to handle empty rule?
         if rule.conds:
             covered = set.intersection(*[self.cond_maps.get(c) for c in rule.conds])
-            return covered if not subset else covered.intersection(subset)
+            return covered if subset is None else covered.intersection(subset)
         else:
-            return self.all if not subset else self.all.intersection(subset)
+            return self.all if subset is None else self.all.intersection(subset)
 
-    def ruleset_covers(self, ruleset, subset={}):
+    def ruleset_covers(self, ruleset, subset=None):
         return set.union(*[set.intersection(*[self.cond_maps.get(c) for c in r.conds]) for r in ruleset]) \
-            if not subset else set.union(*[set.intersection(*[self.cond_maps.get(c) for c in r.conds]) for r in ruleset]).intersection(subset)
+            if subset is None else set.union(*[set.intersection(*[self.cond_maps.get(c) for c in r.conds]) for r in ruleset]).intersection(subset)
 
     def to_df(self, coverage):
         return df.loc[sorted(list(coverage))]
@@ -55,3 +56,14 @@ class CatNap:
             for val in df[feat].unique():
                 conds.append(Cond(feat, val))
         return conds
+
+    def pos_idx_neg_idx(self, df=None, class_feat=None, pos_class=None, pos_df=None, neg_df=None):
+        """ Pass in df, pos_class, and class_feat or pos_df and neg_df """
+        if pos_df is None and neg_df is None:
+            pos_df = df[df[class_feat]==pos_class]
+            neg_df = df[df[class_feat]!=pos_class]
+
+        pos_idx = set(pos_df.index.tolist())
+        neg_idx = set(neg_df.index.tolist())
+
+        return pos_idx, neg_idx
