@@ -44,6 +44,10 @@ class RIPPER:
         self.k = k
         self.verbosity = verbosity
 
+        self.max_rules = None
+        self.max_rule_conds = None
+        self.max_total_conds = None
+
     def __str__(self):
         """ Returns string representation of a RIPPER object. """
         fitstr = f'with fit ruleset' if hasattr(self,'ruleset_') else '(unfit)'
@@ -90,6 +94,9 @@ class RIPPER:
         self.max_rules = max_rules
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
+
+        # Standardize trainset type to DataFrame
+        df = pd.DataFrame(trainset, columns=columns)
 
         # Set up trainset, set class feature name, and set pos class name
         df, self.class_feat, self.pos_class = base_functions.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
@@ -194,7 +201,7 @@ class RIPPER:
         self.recalibrate_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
         # Cleanup
-        del(self.cn)
+        if cn_optimize: del(self.cn)
 
     def predict(self, X_df, give_reasons=False):
         """ Predict classes of data using a RIPPER-fit model.

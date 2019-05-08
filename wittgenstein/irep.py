@@ -42,6 +42,10 @@ class IREP:
         self.prune_size = prune_size
         self.verbosity = verbosity
 
+        self.max_rules = None
+        self.max_rule_conds = None
+        self.max_total_conds = None
+
     def __str__(self):
         """ Returns string representation of an IREP object. """
         fitstr = f'with fit ruleset' if hasattr(self,'ruleset_') else '(unfit)'
@@ -55,7 +59,7 @@ class IREP:
         else:
             print('no model fitted')
 
-    def fit(self, df, y=None, class_feat=None, pos_class=None, n_discretize_bins=10,
+    def fit(self, trainset, y=None, columns=None, class_feat=None, pos_class=None, n_discretize_bins=10,
             max_rules=None, max_rule_conds=None, max_total_conds=None,
             cn_optimize=True, random_state=None):
         """ Fit a Ruleset model using a training DataFrame.
@@ -79,6 +83,14 @@ class IREP:
         """
 
         # Stage 0: Setup
+
+        # Record any hyperparameters
+        self.max_rules = max_rules
+        self.max_rule_conds = max_rule_conds
+        self.max_total_conds = max_total_conds
+
+        # Standardize trainset type to DataFrame
+        df = pd.DataFrame(trainset, columns=columns)
 
         # Set up trainset, set class feature name, and set pos class name
         df, self.class_feat, self.pos_class = base_functions.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)

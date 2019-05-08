@@ -6,7 +6,11 @@ class CatNap:
         Optimized code for speeding up pandas filtering of categorical features.
         .covers methods return pandas indices
     """
-    def __init__(self, df, feat_subset=None, cond_subset=None, class_feat=None, pos_class=None):
+    def __init__(self, df_or_arr, columns=None, feat_subset=None, cond_subset=None, class_feat=None, pos_class=None):
+        df = pd.DataFrame(df_or_arr)
+        if columns:
+            df.columns = columns
+
         if class_feat is None:
             self.conds = self.possible_conds(df) if cond_subset is None else cond_subset
             self.cond_maps = dict([(c, set(c.covers(df).index.tolist())) for c in self.conds])
