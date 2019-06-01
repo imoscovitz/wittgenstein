@@ -1,22 +1,26 @@
-from wittgenstein.base import Cond, Rule, Ruleset, bin_df, rnd
+""" Base functions for Ruleset classifiers """
+
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
+from wittgenstein.base import Cond, Rule, Ruleset, bin_df, bin_transform, rnd, _warn
 from wittgenstein.catnap import CatNap
 
 import math
 from functools import reduce
 import operator as op
 import copy
-import warnings
+import pandas as pd
+import numpy as np
 from random import shuffle, seed
 
 ##########################
 ##### BASE FUNCTIONS #####
 ##########################
 
+# Possible optimization: remove data after each added cond?
 def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), max_rule_conds=None, verbosity=0):
     """ Fit a new rule to add to a ruleset """
-    # Possible optimization: remove data after each added cond?
-
-    #print('grow_rule original')
 
     rule0 = copy.deepcopy(initial_rule)
     if verbosity>=4:
@@ -25,7 +29,6 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), max_rule_cond
     rule1 = copy.deepcopy(rule0)
     while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (max_rule_conds is None or len(rule1.conds) < max_rule_conds): # Stop refining rule if no negative examples remain
         rule1 = best_successor(rule0, possible_conds, pos_df, neg_df, verbosity=verbosity)
-        #print(f'growing rule... {rule1}')
         if rule1 is not None:
             rule0 = rule1
             if verbosity>=4:
@@ -35,12 +38,13 @@ def grow_rule(pos_df, neg_df, possible_conds, initial_rule=Rule(), max_rule_cond
         if verbosity>=2: print(f'grew rule: {rule0}')
         return rule0
     else:
-        #warnings.warn(f"grew an empty rule {rule0} over {len(pos_df)} pos and {len(neg_df)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+        #warning_str = f"grew an empty rule: {rule0} over {len(pos_idx)} pos and {len(neg_idx)} neg"
+        #_warn(warning_str, RuntimeWarning, filename='base_functions', funcname='grow_rule')
         return rule0
 
+# Possible optimization: remove data after each added cond?
 def grow_rule_cn(cn, pos_idx, neg_idx, initial_rule=Rule(), max_rule_conds=None, verbosity=0):
     """ Fit a new rule to add to a ruleset """
-    # Possible optimization: remove data after each added cond?
 
     rule0 = copy.deepcopy(initial_rule)
     rule1 = copy.deepcopy(rule0)
@@ -61,7 +65,8 @@ def grow_rule_cn(cn, pos_idx, neg_idx, initial_rule=Rule(), max_rule_conds=None,
         if verbosity>=2: print(f'grew rule: {rule0}')
         return rule0
     else:
-        warnings.warn(f"grew an empty rule {rule0} over {len(pos_idx)} pos and {len(neg_idx)} neg", RuntimeWarning)#, stacklevel=1, source=None)
+        #warning_str = f"grew an empty rule: {rule0} over {len(pos_idx)} pos and {len(neg_idx)} neg"
+        #_warn(warning_str, RuntimeWarning, filename='base_functions', funcname='grow_rule_cn')
         return rule0
 
 def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_ruleset=None, verbosity=0):
@@ -79,7 +84,8 @@ def prune_rule(rule, prune_metric, pos_pruneset, neg_pruneset, eval_index_on_rul
     """
 
     if rule.isempty():
-        warnings.warn(f"can't prune empty rule {rule}", RuntimeWarning)#, stacklevel=1, source=None)
+        #warning_str = f"can't prune empty rule: {rule}"
+        #_warn(warning_str, RuntimeWarning, filename='base_functions', funcname='prune_rule')
         return rule
 
     if not eval_index_on_ruleset:
@@ -149,7 +155,8 @@ def prune_rule_cn(cn, rule, prune_metric_cn, pos_idx, neg_idx, eval_index_on_rul
     """
 
     if rule.isempty():
-        warnings.warn(f"can't prune empty rule {rule}", RuntimeWarning)#, stacklevel=1, source=None)
+        #warning_str = f"can't prune empty rule: {rule}"
+        #_warn(warning_str, RuntimeWarning, filename='base_functions', funcname='prune_rule_cn')
         return rule
 
     if not eval_index_on_ruleset:
@@ -204,7 +211,7 @@ def prune_rule_cn(cn, rule, prune_metric_cn, pos_idx, neg_idx, eval_index_on_rul
             current_ruleset.rules[rule_index] = current_rule
         return best_rule
 
-def recalibrate_proba(ruleset, Xy_df, class_feat, pos_class, min_samples=20, require_min_samples=True, discretize=True, bin_transformer=None):
+def recalibrate_proba(ruleset, Xy_df, class_feat, pos_class, min_samples=10, require_min_samples=True, discretize=True, bin_transformer=None):
     """ Recalibrate a Ruleset's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
         Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
@@ -213,13 +220,15 @@ def recalibrate_proba(ruleset, Xy_df, class_feat, pos_class, min_samples=20, req
 
         Xy_df <DataFrame>: labeled data
 
-        min_samples <int> (optional): required minimum number of samples per Rule
-                                      default=10. set None to ignore min sampling requirement so long as at least one sample exists.
+        min_samples <int> (optional): required minimum number of samples per Rule. (default=10) Regardless of min_samples, at least one sample of the correct class will always be required.
         require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
                                                False: warn, but still replace Rules that have enough samples
         discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize recalibrate_proba's training data
                                       default=True
     """
+
+    # At least this many samples per rule (or neg) must be of correct class
+    required_correct_samples = 1
 
     # If not using min_samples, set it to 1
     if not min_samples or min_samples < 1:
@@ -232,47 +241,60 @@ def recalibrate_proba(ruleset, Xy_df, class_feat, pos_class, min_samples=20, req
     else:
         df = Xy_df
 
-    # Collect each Rule's pos and neg frequencies
-    rule_class_freqs = [None]*len(ruleset.rules) # to contain new frequencies for each Rule
+    # Collect each Rule's pos and neg frequencies in list "rule_class_freqs"
+    # Store rules that lack enough samples in list "insufficient_rules"
+    rule_class_freqs = [None]*len(ruleset.rules)
     insufficient_rules = []
     for i, rule in enumerate(ruleset.rules):
         npos_pred = num_pos(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
         nneg_pred = num_neg(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
         pos_neg_pred = (npos_pred, nneg_pred)
         rule_class_freqs[i] = pos_neg_pred
-        if sum(pos_neg_pred) < min_samples:
+        # Rule has insufficient samples if fewer than minsamples or lacks at least one correct sample
+        if sum(pos_neg_pred) < min_samples or sum(pos_neg_pred) < 1 or pos_neg_pred[0] < required_correct_samples:
             insufficient_rules.append(rule)
 
-    # Collect Ruleset's uncovered frequencies
+    # Collect class frequencies for negative predictions
     uncovered = df.drop(ruleset.covers(df).index)
     neg_freq = num_neg(uncovered, class_feat=class_feat, pos_class=pos_class)
     fn_tn = (len(uncovered) - neg_freq, neg_freq)
 
-    if min_samples: # This will always execute b/c None min_samples is set to 1, but it's worth including the logic in case that implementation detail ever changes
-        if insufficient_rules:
-            warning_str = f'recalibrate_proba: param min_samples={min_samples}; insufficient number of samples from rules {insufficient_rules}'
-            warnings.warn(warning_str, RuntimeWarning)
-        if sum(fn_tn) < min_samples:
-            warning_str = f'recalibrate_proba: param min_samples={min_samples}; insufficient number of negatively labled samples {sum(fn_tn)}'
-            warnings.warn(warning_str, RuntimeWarning)
+    if min_samples: # This will always execute b/c None and <1 min_samples is set to 1, but it's worth including the logic in case that implementation detail ever changes
+        if insufficient_rules: # WARN if/which rules lack enough samples
+            warning_str = f'param min_samples={min_samples}; insufficient number of samples or fewer than {required_correct_samples} correct samples for rules {insufficient_rules}'
+            _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
+        if neg_freq < min_samples or fn_tn[1]<1: # WARN if neg lacks enough samples
+            warning_str = f'param min_samples={min_samples}; insufficient number of negatively labled samples'
+            _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
         if insufficient_rules or sum(fn_tn) < min_samples:
-            if require_min_samples:
-                warning_str = f'recalibrate_proba: recalibrating halted. to recalibrate, try lowering min_samples or set require_min_samples to False'
-                warnings.warn(warning_str, RuntimeWarning)
+            if require_min_samples: # WARN if require_min_samples -> halting recalibration
+                warning_str = f'Recalibrating halted. to recalibrate, try using more samples, lowering min_samples, or set require_min_samples to False'
+                _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
                 return
             else:
-                warning_str = f'recalibrate_proba: retaining probabilities for rules without enough samples and because param required_min_samples=False; recalibrate any rules that have samples > parm min_samples={min_samples}'
-                warnings.warn(warning_str, RuntimeWarning)
+                warning_str = f'Because require_min_samples=False, recalibrating probabilities for any rules with enough samples min_samples>={min_samples} that have at least {required_correct_samples} correct samples even though not all rules have enough samples. Probabilities for any rules that lack enough samples will be retained.'
+                _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
 
     # Assign collected frequencies to Rules
     for rule, freqs in zip(ruleset.rules, rule_class_freqs):
-        if freqs is not None:
+        if sum(freqs) >= min_samples and freqs[0]>=required_correct_samples:
             rule.class_freqs = freqs
         else:
             pass # ignore Rules that don't have enough samples
 
     # Assign Ruleset's uncovered frequencies
-    ruleset.uncovered_class_freqs = fn_tn
+    if not hasattr(ruleset,'uncovered_class_freqs') or (neg_freq >= min_samples and fn_tn[1]>=required_correct_samples):
+        ruleset.uncovered_class_freqs = fn_tn
+
+    # Warn if no pos or no neg samples
+    nopos = (sum([freqs[0] for freqs in rule_class_freqs])+ruleset.uncovered_class_freqs[0])==0
+    noneg = (sum([freqs[1] for freqs in rule_class_freqs])+ruleset.uncovered_class_freqs[1])==0
+    if nopos:
+        warning_str=f"No positive samples"
+        _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
+    if noneg:
+        warning_str=f"No negative samples."
+        _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
 
 ###################
 ##### METRICS #####
@@ -311,6 +333,7 @@ def gain_cn(cn, cond_step, rule_covers_pos_idx, rule_covers_neg_idx):
     #if p1count > p0count or n1count > n0count:
     #    print(cond_step, p0count, p1count, n0count, n1count, rnd(g))
     return g
+
 def precision(object, pos_df, neg_df):
     """ Returns precision value of object's classification.
         object: Cond, Rule, or Ruleset
@@ -495,8 +518,177 @@ def rm_rule_covers_cn(cn, rule, pos_idx, neg_idx):
     return (pos_idx - cn.rule_covers(rule, pos_idx), \
             neg_idx - cn.rule_covers(rule, neg_idx))
 
+def preprocess_training_data(X_or_Xy, y=None,
+                    class_feat=None, pos_class=None, user_requested_feature_names=None,
+                    bin_transformer_=None, n_discretize_bins=0,
+                    verbosity=0):
+
+    # STEP 0: ERROR CHECKING
+    _check_valid_input_data(X_or_Xy, y, class_feat)
+
+    # STEP 1: DETERMINE class_feat
+    class_feat = _get_class_feat_name(class_feat, y)
+
+    # STEP 2: CONVERT X_or_Xy (and if necessary y) to DataFrame
+    df = _convert_to_df(X_or_Xy, y, class_feat)
+
+    # STEP 3: DEFINE pos_class
+    pos_class = _get_pos_class(df, class_feat, pos_class)
+
+    # STEP 4: GET_OR_SET FEATURE NAMES
+    df, trainset_features = _get_or_set_feature_names(df, class_feat, user_requested_feature_names)
+
+    # STEP 5: INFER FEATURE DTYPES
+    df = df.infer_objects()
+
+    # STEP 6: BIN FIT_TRANSFORM, TRANSFORM, or NOTHING
+    df, bin_transformer_ = _try_bin_fit_or_fittransform_(df, bin_transformer_, n_discretize_bins, ignore_feats=[class_feat], verbosity=verbosity)
+
+    # ALL DONE
+    return df, class_feat, pos_class, trainset_features, bin_transformer_
+
+def preprocess_prediction_data(X, trainset_features, model_selected_features, bin_transformer_, user_requested_feature_names=None, verbosity=0):
+
+    # STEP 1: CREATE DF FROM X
+    df = pd.DataFrame(X, columns=user_requested_feature_names)
+
+    # STEP 2: CHECK THAT ALL MODEL FEAETURES ARE PRESENT IN X
+    _check_all_model_features_in_X(df, trainset_features, model_selected_features)
+
+    # STEP 3: ASK PANDAS TO CORRECT DTYPES
+    df = df.infer_objects()
+
+    # STEP 4: BIN, IF NECESSARY
+    df, _ = _try_bin_fit_or_fittransform_(df, bin_transformer_, n_discretize_bins=None, ignore_feats=[], verbosity=verbosity)
+
+    return df
+
+def _check_valid_input_data(X_or_Xy, y=None, class_feat=None):
+
+    # Make sure there is data
+    if not _check_some_datasets_not_empty([X_or_Xy]):
+        raise ValueError('No data provided!')
+
+    # Ensure class feature is provided or can be inferred
+    if (y is None) and (class_feat is None):
+        raise ValueError('y or class_feat param is required')
+
+    # Ensure target data exists if class feat is provided
+    if (y is None):
+        # X_or_Xy is a df: does target column exist?
+        if hasattr(X_or_Xy, 'columns') and (class_feat not in X_or_Xy.columns):
+            raise IndexError(f'Data does not contain class feature {class_feat}')
+        # X_or_Xy is an array or iterable: does target index exist?
+        elif not hasattr(X_or_Xy, 'columns'):
+            try:
+                if len(X_or_Xy[0]) > class_feat:
+                    raise IndexError(f'Data does not contain class index {class_feat}')
+            except:
+                raise IndexError(f'Data does not contain class index {class_feat}')
+
+    # Ensure no class feature name mismatch
+    if y is not None and class_feat is not None \
+            and hasattr(y, 'name') \
+            and y.name != class_feat:
+        raise ValueError(f'Value mismatch between params y {y.name} and class_feat {class_feat}. Besides, you only need to provide one of them.')
+
+def _get_class_feat_name(class_feat, y):
+
+    if class_feat is not None:
+        return class_feat
+
+    if y is not None and hasattr(y, 'name'):
+        # If y is a pandas Series, try to get its name
+        class_feat = y.name
+    else:
+        # Create a name for it
+        class_feat = 'Class'
+
+    return class_feat
+
+def _convert_to_df(X_or_Xy, y, class_feat):
+
+    # Create df from X_or_Xy
+    df = pd.DataFrame(X_or_Xy)
+
+    # If necessary, merge y into df
+    if y is not None:
+        # If y is pd or np type, add it
+        try:
+            df = df.set_index(y.index)
+            df[class_feat]=y
+        # If that doesn't work, it's likely a python iterable
+        except:
+            df[class_feat]=y
+    return df
+
+def _get_pos_class(df, class_feat, pos_class):
+    # If provided, define positive class name. Otherwise, choose class of first example.
+    if pos_class is not None:
+        return pos_class
+    else:
+        return df.iloc[0][class_feat]
+
+def _try_bin_fit_or_fittransform_(df, bin_transformer, n_discretize_bins, ignore_feats, verbosity=0):
+    # Fit new bins to data
+    if not bin_transformer and n_discretize_bins:
+        df, bin_transformer = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=ignore_feats, verbosity=verbosity)
+
+    # Transform data with preexisting bins
+    elif bin_transformer:
+        bin_transform(df, bin_transformer)
+
+    # Don't do any binning
+    else:
+        pass
+
+    return df, bin_transformer
+
+def _get_or_set_feature_names(df, class_feat, user_requested_feature_names=None):
+    # df's tentative feature names
+    df_columns = df.drop(class_feat,axis=1).columns.tolist()
+
+    # No feature name request: use default
+    if not user_requested_feature_names:
+        return df, df_columns
+
+    # User wants to rename features
+    if len(df_columns)==len(user_requested_feature_names):
+        col_replacements_dict = {old:new for old,new in zip(df_columns,user_requested_feature_names)}
+        df = df.rename(columns=col_replacements_dict)
+        return df, user_requested_feature_names
+
+    # User tried to rename features but supplied the wrong number of feature names
+    else:
+        raise IndexError(f'The number of requested features names ({len(user_requested_feature_names)}) does not match the number of non-class features in dataset ({len(df_columns)}).\nParam feature_names: {user_requested_feature_names}\nTraining set features names: {df_columns}')
+
+def _check_all_model_features_in_X(df, trainset_features, model_selected_features):
+
+    df_feats = df.columns.tolist()
+    missing_feats = [f for f in model_selected_features if f not in df_feats]
+
+    # User supplied same number of features in prediction set as training set, but wrong names.
+    # Assume they are same but give stern warning
+    if missing_feats:
+        if len(trainset_features)==len(df_feats):
+            warnings_str=f"Mismatch between Ruleset training feature names and prediction feature names.\nPredicting under on the assumption that the features provided for prediction are the same as those the model was trained on, and that they are being provided in the same order.\nYou probably want to ensure your prediction dataset includes the same feature names as your Ruleset selected features (the missing selected feature names are {missing_feats}), or alternately, use .predict param feature_names to specify what prediction feature names should be.\nCurrent prediction feature names:{df.columns.tolist()}"
+            _warn(warnings_str, RuntimeWarning, filename='base_functions', funcname='_check_all_model_features_in_X')
+            print([type(f) for f in missing_feats])
+            print([type(f) for f in df_feats])
+            df.columns = trainset_features
+            return
+
+    # Didn't provide all model selected features.
+        else:
+            raise IndexError(f'The features selected by Ruleset model need to be present in prediction dataset.\nMissing features: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use .predict param feature_names to specify the names of prediction dataset features.\nCurrent prediction feature names:{df.columns.tolist()}')
+            return
+
 def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
     """ Process params into trainset, class feature name, and pos class, for use in .fit methods. """
+
+    if not _check_some_datasets_not_empty([df]) and not y:
+        warnings_str="Can't train on an empty dataset!"
+        _warn(warnings_str, RuntimeWarning, filename='base_functions', funcname='grow_rule_cn')
 
     # Ensure class feature is provided
     if (y is None) and (class_feat is None):
@@ -504,12 +696,6 @@ def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
 
     if (y is None) and (class_feat not in df.columns):
         raise ValueError(f'DataFrame df does not contain class feature {class_feat}')
-
-    if (class_feat in df.columns) and (pos_class is not None) and (len(df[df[class_feat]==pos_class])==0):
-        raise ValueError(f'DataFrame df class feature {class_feat} does not contain any members of positive class {pos_class}')
-
-    if (y is not None) and (pos_class is not None) and not ([val for val in y if val==pos_class]):
-        raise ValueError(f'y does not contain any members of positive class {pos_class}')
 
     # Ensure no class feature name mismatch
     if y is not None and class_feat is not None \
@@ -540,10 +726,26 @@ def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
 
     return (df, class_feat, pos_class)
 
-def as_type(df, new_type, ignore_cols=[]):
-    result = df.copy()
-    ignore = set(ignore_cols)
-    for col in df.columns:
-        if col not in ignore:
-            result[col] = result[col].astype(new_type)
-    return result
+def aslist(data):
+    if type(data)==pd.core.frame.DataFrame or type(data)==np.ndarray:
+        return data.tolist()
+    else:
+        return data
+
+def infer_columns(df, expected_columns):
+    if df.columns.tolist()==expected_columns:
+        return expected_columns
+    problem_str = f'Did not receive expected feature names. Received {df.columns.tolist()}. Expected {expected_columns}'
+    if len(df.columns)==len(expected_columns):
+        _warn(problem_str, RuntimeWarning, filename='base_functions', funcname='infer_columns')
+        return pd.DataFrame(df, columns=expected_columns)
+    else:
+        raise IndexError(problem_str)
+        return df.columns.tolist()
+
+    #####################
+    ##### CHECKERS ######
+    #####################
+
+def _check_some_datasets_not_empty(datasets):
+    return any([len(dataset)>0 for dataset in datasets])

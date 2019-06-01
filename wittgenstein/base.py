@@ -1,11 +1,19 @@
-""" Base classes and functions for ruleset classifiers """
+""" Base classes for ruleset classifiers """
 
 import math
 import numpy as np
 import copy
-import warnings
 from numpy import var, mean
 import time
+
+import warnings
+def _warn(message, category, filename, funcname, warnstack=[]):
+    """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
+    message='\n'+message+'\n'
+    filename+='.py'
+    funcname=' .'+funcname
+    if warnstack: filename = str([stack_filename+'.py: .'+stack_funcname+' | ' for stack_filename, stack_funcname in warnstack]).strip('[').strip(']').strip(' ').strip("'")+filename
+    warnings.showwarning(message, category, filename=filename, lineno=funcname)
 
 class Ruleset:
     """ Base Ruleset model.
@@ -74,9 +82,11 @@ class Ruleset:
 
     def covers(self, df):
         """ Returns instances covered by the Ruleset. """
-
-        if not self.rules:
+        allpos, allneg = self._check_allpos_allneg(warn=False)
+        if allpos:
             return df
+        elif allneg:
+            return df.head(0)
         else:
             covered = self.rules[0].covers(df).copy()
             for rule in self.rules[1:]:
@@ -117,7 +127,7 @@ class Ruleset:
             while len(self.rules) > 0 and self.count_conds() > max_total_conds:
                 self.rules.pop(-1)
 
-    def predict(self, X_df, give_reasons=False):
+    def predict(self, X_df, give_reasons=False, warn=True):
         """ Predict classes of data using a fit Ruleset model.
 
             args:
@@ -132,6 +142,9 @@ class Ruleset:
                     and a list of the corresponding reasons for each prediction;
                     for each positive prediction, gives a list of all the covering Rules, for negative predictions, an empty list.
         """
+
+        # Issue warning if Ruleset is universal or empty
+        self._check_allpos_allneg(warn=warn, warnstack=[('base','predict')])
 
         covered_indices = set(self.covers(X_df).index.tolist())
         predictions = [i in covered_indices for i in X_df.index]
@@ -163,7 +176,7 @@ class Ruleset:
 
                 returns:
                     numpy array of values corresponding to each example's classes probabilities, or, if give_reasons or ret_n, a tuple containing proba array and list(s) of desired returns
-
+                    a sample's class probabilities will be None if there are fewer than @param min_samples
         """
 
         # Apply binning if necessary
@@ -174,21 +187,22 @@ class Ruleset:
             df = X_df
 
         # probas for all negative predictions
+        #print(self.uncovered_class_freqs)
         uncovered_proba = weighted_avg_freqs([self.uncovered_class_freqs])
         uncovered_n = sum(self.uncovered_class_freqs)
 
         # make predictions
-        predictions, covering_rules = self.predict(df, give_reasons=True)
+        predictions, covering_rules = self.predict(df, give_reasons=True, warn=False)
         N = []
 
         # collect probas
         probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
         for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
             n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
-            if p and (n < 1 or (min_samples and n < min_samples)):
+            if (p==True) and (n < 1 or (min_samples and n < min_samples)):
                 probas[i, :] = None
                 N.append(n)
-            elif (not p) and (uncovered_n < 1 or uncovered_n < min_samples):
+            elif (p==False) and (uncovered_n < 1 or uncovered_n < min_samples):
                 probas[i, :] = None
                 N.append(n)
             elif p: # pos prediction
@@ -197,10 +211,32 @@ class Ruleset:
             else: # neg prediction
                 probas[i, :] = uncovered_proba
                 N.append(uncovered_n)
-
         # return probas (and optional extras)
         result = flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
         return result
+
+    def _check_allpos_allneg(self, warn=False, warnstack=''):
+        """ Return tuple<bool> representing whether a Ruleset is universal (always predicts pos), empty (always predicts neg) """
+        allpos = self.rules==[Rule()]
+        allneg = self.rules==[]
+        if allpos and warn:
+            warning_str=f"Ruleset is universal. All predictions it makes with method .predict will be positive. It may be untrained or was trained on a dataset split lacking negative examples."
+            _warn(warning_str, RuntimeWarning, filename='base', funcname='_check_allpos_allneg', warnstack=warnstack)
+        elif allneg and warn:
+            warning_str=f"Ruleset is empty. All predictions it makes with method .predict will be negative. It may be untrained or was trained on a dataset split lacking positive examples."
+            _warn(warning_str, RuntimeWarning, filename='base', funcname='_check_allpos_allneg', warnstack=warnstack)
+        return allpos, allneg
+
+    def get_selected_features(self):
+        feature_list = []
+        feature_set = set()
+        for rule in self.rules:
+            for cond in rule.conds:
+                feature = cond.feature
+                if feature not in feature_set:
+                    feature_list.append(feature)
+                    feature_set.add(feature)
+        return feature_list
 
 class Rule:
     """ Class implementing conjunctions of Conds """
@@ -212,12 +248,14 @@ class Rule:
             self.conds = conds
 
     def __str__(self):
-        rule_str = str([str(cond) for cond in self.conds]).replace(',','^').replace("'","").replace(' ','')
+        if not self.conds:
+            rule_str = '[True]'
+        else:
+            rule_str = str([str(cond) for cond in self.conds]).replace(',','^').replace("'","").replace(' ','')
         return rule_str
 
     def __repr__(self):
-        rule_str = str([str(cond) for cond in self.conds]).replace(', ','^').replace("'","").replace(' ','')
-        return f'<Rule object: {rule_str}>'
+        return f'<Rule object: {str(self)}>'
 
     def __add__(self, cond):
         if isinstance(cond, Cond):
@@ -230,6 +268,9 @@ class Rule:
         #    raise TypeError(f'{self} __eq__ {other}: a Rule can only be compared with another rule')
         if len(self.conds)!=len(other.conds): return False
         return set([str(cond) for cond in self.conds]) == set([str(cond) for cond in other.conds])
+
+    def __hash__(self):
+        return hash(str([self.conds]))
 
     def isempty(self):
         return len(self.conds)==0
@@ -293,7 +334,6 @@ class Cond:
 
     def covers(self, df):
         """ Returns instances covered by the Cond (i.e. those which are not in contradiction with it). """
-        #print(f'{self} covers')
         return df[df[self.feature]==self.val]
 
     def num_covered(self, df):
@@ -330,12 +370,10 @@ class Timer:
 ########################################
 
 def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
-    """ Returns df with seemingly numeric features binned, and the bin_transformer, if binning takes places. """
+    """ Returns df with seemingly numeric features binned, and the bin_transformer or None depending on whether binning takes places. """
 
     isbinned = False
-    min_unique = n_discretize_bins if n_discretize_bins else 10 # Minimum unique values to consider continuous. Override with 10 (rather than halt) to allow warnings to occur
-    numeric_feats = find_numeric_feats(df, min_unique=min_unique, ignore_feats=ignore_feats)
-
+    numeric_feats = find_numeric_feats(df, ignore_feats=ignore_feats)
     if numeric_feats:
         if n_discretize_bins:
             if verbosity==1:
@@ -348,20 +386,18 @@ def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
             isbinned = True
         else:
             n_unique_values = sum([len(u) for u in [df[f].unique() for f in numeric_feats]])
-            warnings.warn(f"There are {len(numeric_feats)} apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'", RuntimeWarning)
-
+            warning_str=f"There are {len(numeric_feats)} apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'"
+            _warn(warning_str, RuntimeWarning, filename='base', funcname='bin_df')
     if isbinned:
         return binned_df, bin_transformer
     else:
         return df, None
 
-def find_numeric_feats(df, min_unique=10, ignore_feats=[]):
+def find_numeric_feats(df, ignore_feats=[]):
     """ Returns df features that seem to be numeric. """
-    #feats = df.dtypes[(df.dtypes=='float64') | (df.dtypes=='int64')].index.tolist()
-    feats = df._get_numeric_data().columns
-    feats = [f for f in feats if f not in ignore_feats]
-    feats = [f for f in feats if len(df[f].unique())>min_unique]
-    return feats
+    numeric_feats = df.select_dtypes(np.number)
+    numeric_feats = [f for f in numeric_feats if f not in ignore_feats]
+    return numeric_feats
 
 def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
     """
@@ -393,7 +429,6 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
             while finish_i<len(sorted_df)-1 and finish_i!=0 and \
                     sorted_df.iloc[finish_i][feat]==sorted_df.iloc[finish_i-1][feat]: # ensure next bin begins on a new value
                 finish_i+=1
-                #print(f'{sorted_df.iloc[finish_i][feat]} {sorted_df.iloc[finish_i-1][feat]} {finish_i}')
             sizes.append(finish_i-start_i)
             if verbosity >=4: print(f'bin #{bin}, start_idx {start_i} value: {sorted_df.iloc[start_i][feat]}, finish_idxx {finish_i} value: {sorted_df.iloc[finish_i][feat]}')
             start_val = sorted_values[start_i]
@@ -436,18 +471,18 @@ def bin_transform(df, fit_dict, names_precision=2):
             Returns bin string name for a given numberical value
             Assumes bin_fit_list is ordered
             """
-            min_val = bin_fit_list[0][0]
-            max_val = bin_fit_list[-1][1]
+            min_val, min_bin = bin_fit_list[0][0], bin_fit_list[0]
+            max_val, max_bin = bin_fit_list[-1][1], bin_fit_list[-1]
             for bin_fit in bin_fits:
                 if value <= bin_fit[1]:
                     start_name = str(round(bin_fit[0], names_precision))
                     finish_name = str(round(bin_fit[1], names_precision))
                     bin_name = '-'.join([start_name, finish_name])
                     return bin_name
-            if value < min_val:
-                return min_val
-            elif value > max_val:
-                return max_val
+            if value <= min_val:
+                return min_bin
+            elif value >= max_val:
+                return max_bin
             else:
                 raise ValueError('No bin found for value', value)
 
@@ -455,13 +490,13 @@ def bin_transform(df, fit_dict, names_precision=2):
         for value in df[feat]:
             bin_name = renamed(bin_fits, value, names_precision)
             renamed_values.append(bin_name)
-
         return renamed_values
 
     # Replace each feature with bin transformations
     for feat, bin_fits in fit_dict.items():
-        feat_transformation = bin_transform_feat(df, feat, bin_fits, names_precision=names_precision)
-        df[feat] = feat_transformation
+        if feat in df.columns:
+            feat_transformation = bin_transform_feat(df, feat, bin_fits, names_precision=names_precision)
+            df[feat] = feat_transformation
     return df
 
 ######################
@@ -475,7 +510,7 @@ def weighted_avg_freqs(counts):
     """
     arr = np.array(counts)
     total = arr.flatten().sum()
-    return arr.sum(axis=0) / total
+    return arr.sum(axis=0) / total if total else arr.sum(axis=0)
 
 def flagged_return(flags, objects):
     """ Returns only objects with corresponding True flags

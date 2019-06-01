@@ -1,6 +1,5 @@
 """
-This module implements incremental reduced error pruning (IREP*) algorithm
-for growing classification rulesets.
+Implementation of incremental reduced error pruning (IREP*) algorithm for growing classification rulesets.
 See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 """
 
@@ -8,25 +7,20 @@ See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 # License: MIT
 
 import pandas as pd
-import math
 import random
 import copy
-import warnings
 import numpy as np
 
-#from wittgenstein import base, base_functions
-#import base
-#import base_functions
 from wittgenstein import base, base_functions
 from .base import Cond, Rule, Ruleset, bin_df
-from .base_functions import rnd, score_accuracy#, bin_df
+from .base_functions import rnd, score_accuracy
 
 from .catnap import CatNap
 
 class IREP:
     """ Class for generating ruleset classification models. """
 
-    def __init__(self, prune_size=.33, verbosity=0):
+    def __init__(self, prune_size=.33, max_rules=None, max_rule_conds=None, max_total_conds=None, verbosity=0):
         """ Creates a new IREP object.
 
             args:
@@ -39,17 +33,20 @@ class IREP:
                                            4: Show Rule grow/prune steps
                                            5: Show Rule grow/prune calculations
         """
-        self.prune_size = prune_size
-        self.verbosity = verbosity
+        self.POSSIBLE_HYPERPARAM_NAMES = {'prune_size','max_rules','max_rule_conds','max_total_conds'}
 
-        self.max_rules = None
-        self.max_rule_conds = None
-        self.max_total_conds = None
+        self.prune_size = prune_size
+        self.max_rules = max_rules
+        self.max_rule_conds = max_rule_conds
+        self.max_total_conds = max_total_conds
+
+        self.verbosity = verbosity
 
     def __str__(self):
         """ Returns string representation of an IREP object. """
-        fitstr = f'with fit ruleset' if hasattr(self,'ruleset_') else '(unfit)'
-        return f'<IREP object {fitstr}>'
+        params=str(self.get_params())+'>'
+        params=params.replace(': ','=').replace("'",'').replace('{',"(").replace('}',')')
+        return f'<IREP{params}'
     __repr__ = __str__
 
     def out_model(self):
@@ -59,16 +56,18 @@ class IREP:
         else:
             print('no model fitted')
 
-    def fit(self, trainset, y=None, columns=None, class_feat=None, pos_class=None, n_discretize_bins=10,
+    def fit(self, trainset, y=None, class_feat=None, pos_class=None, feature_names=None,
+            n_discretize_bins=10,
             max_rules=None, max_rule_conds=None, max_total_conds=None,
             cn_optimize=True, random_state=None):
-        """ Fit a Ruleset model using a training DataFrame.
+        """ Fit a Ruleset model.
 
             args:
-                df <DataFrame>: categorical training dataset
-                y: <iterable>: class labels corresponding to df rows. Parameter y or class_feat (see next) must be provided.
+                trainset: categorical training dataset <pandas DataFrame, numpy array, or other Python iterable>
+                y: class labels corresponding to trainset rows. Parameter y or class_feat (see next) must be provided.
                 class_feat: column name of class feature (Use if class feature is still in df.)
 
+                feature_names (optional): if trainset inputted as non-DataFrame iterable (such as numpy array), sets feature names. If None, and training data not a DatFrame, feature for arrays and python iterables will be set to column indices. (default=None)
                 pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
                 n_discretize_bins (optional): Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range.
                                               Pass None to disable auto-discretization. (default=10)
@@ -89,24 +88,21 @@ class IREP:
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
 
-        # Standardize trainset type to DataFrame
-        df = pd.DataFrame(trainset, columns=columns)
-
-        # Set up trainset, set class feature name, and set pos class name
-        df, self.class_feat, self.pos_class = base_functions.trainset_classfeat_posclass(df, y=y, class_feat=class_feat, pos_class=pos_class)
-
-        # Anything to discretize?
-        df, self.bin_transformer_ = bin_df(df, n_discretize_bins=n_discretize_bins, ignore_feats=[self.class_feat], verbosity=self.verbosity)
-
-        # Split df into pos, neg classes
-        pos_df, neg_df = base_functions.pos_neg_split(df, self.class_feat, self.pos_class)
-        pos_df = pos_df.drop(self.class_feat,axis=1)
-        neg_df = neg_df.drop(self.class_feat,axis=1)
+        # Preprocess training data
+        df, self.class_feat, self.pos_class, self.trainset_features_, self.bin_transformer_ = base_functions.preprocess_training_data(trainset, y=y,
+                            class_feat=class_feat, pos_class=pos_class, user_requested_feature_names=feature_names,
+                            bin_transformer_=None, n_discretize_bins=n_discretize_bins,
+                            verbosity=self.verbosity)
 
         # Create CatNap
         # possible minor speedup if pass cond_subset of only pos_class conds?
         if cn_optimize:
             self.cn = CatNap(df, feat_subset=None, cond_subset=None, class_feat=self.class_feat, pos_class=None)
+
+        # Split df into pos, neg classes
+        pos_df, neg_df = base_functions.pos_neg_split(df, self.class_feat, self.pos_class)
+        pos_df = pos_df.drop(self.class_feat,axis=1)
+        neg_df = neg_df.drop(self.class_feat,axis=1)
 
         # Stage 1 (of 1): Grow Ruleset
         self.ruleset_ = Ruleset()
@@ -123,16 +119,26 @@ class IREP:
             self.ruleset_.out_pretty()
             print()
 
+        # Issue warning if Ruleset is universal or empty
+        self.ruleset_._check_allpos_allneg(warn=True, warnstack=[('irep','fit')])
+
+        # Set selected features
+        self.selected_features_ = self.ruleset_.get_selected_features()
+
         # Fit probas
         self.recalibrate_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
-    def predict(self, X_df, give_reasons=False):
+        # Cleanup
+        if cn_optimize: del(self.cn)
+
+    def predict(self, X, give_reasons=False, feature_names=None):
         """ Predict classes of data using a IREP-fit model.
 
             args:
-                X_df <DataFrame>: examples to make predictions on.
+                X: examples to make predictions on. Should include at least the features selected by model.
 
                 give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+                feature_names (optional) <list>: specify different feature names for X to ensure they match up with the names of selected features.
 
             returns:
                 list of <bool> values corresponding to examples. True indicates positive predicted class; False non-positive class.
@@ -143,20 +149,17 @@ class IREP:
         """
 
         if not hasattr(self, 'ruleset_'):
-            raise AttributeError('You should fit an IREP object before making predictions with it.')
+            raise AttributeError('You should fit an IREP object with .fit method before making predictions with it.')
 
-        if not self.bin_transformer_:
-            return self.ruleset_.predict(X_df, give_reasons=give_reasons)
-        else:
-            binned_X = X_df.copy()
-            base.bin_transform(binned_X, self.bin_transformer_)
-            return self.ruleset_.predict(binned_X, give_reasons=give_reasons)
+        X_df = base_functions.preprocess_prediction_data(X, trainset_features=self.trainset_features_, model_selected_features=self.selected_features_, bin_transformer_=self.bin_transformer_, user_requested_feature_names=feature_names, verbosity=0)
+
+        return self.ruleset_.predict(X_df, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
         """ Test performance of an IREP-fit model.
 
-            X: <DataFrame> of independent attributes
-            y: <DataFrame> or <iterable> of matching dependent target values
+            X: 2-D independent attributes values
+            y: 1-D corresponding target values
 
             score_function (optional): function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>,
                                        containing class values. (default=accuracy)
@@ -165,10 +168,7 @@ class IREP:
         """
 
         predictions = self.predict(X)
-        if type(y)==pd.core.frame.DataFrame:
-            actuals = [yi==self.pos_class for yi in y.tolist()]
-        else:
-            actuals = [yi==self.pos_class for yi in y]
+        actuals = [yi==self.pos_class for yi in base_functions.aslist(y)]
         return score_function(actuals, predictions)
 
     def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1, discretize=True):
@@ -176,14 +176,14 @@ class IREP:
         df = X_df if self.class_feat not in X_df.columns else X_df.drop(self.class_feat, axis=1)
         return self.ruleset_.predict_proba(df, give_reasons=give_reasons, ret_n=ret_n, min_samples=min_samples, discretize=True, bin_transformer=self.bin_transformer_)
 
-    def recalibrate_proba(self, Xy_df, min_samples=20, require_min_samples=True, discretize=True):
+    def recalibrate_proba(self, Xy, min_samples=20, require_min_samples=True, discretize=True):
         """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
             Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
             Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
             Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
-            Xy_df <DataFrame>: labeled data
+            Xy: labeled data
 
             min_samples <int> (optional): required minimum number of samples per Rule
                                           default=10. set None to ignore min sampling requirement so long as at least one sample exists.
@@ -194,7 +194,15 @@ class IREP:
         """
 
         # Recalibrate
-        base_functions.recalibrate_proba(self.ruleset_, Xy_df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+        base_functions.recalibrate_proba(self.ruleset_, Xy_df=Xy, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+
+    def get_params(self, deep=True):
+        return {param:self.__dict__.get(param) for param in self.POSSIBLE_HYPERPARAM_NAMES}
+    def set_params(self, **parameters):
+        for parameter, value in parameters.items():
+            #if parameter in self.POSSIBLE_HYPERPARAM_NAMES:
+            setattr(self, parameter, value)
+        return self
 
     def _grow_ruleset(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
         """ Grow a Ruleset with (optional) pruning. """
@@ -284,10 +292,7 @@ class IREP:
             # Grow-prune split remaining uncovered examples (if applicable)
             pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(pos_remaining_idx, (1-prune_size), random_state=random_state)
             neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(neg_remaining_idx, (1-prune_size), random_state=random_state)
-            #print('pos_growset')
-            #print(sorted(list(pos_growset_idx)))
-            #print('neg_growset')
-            #print(sorted(list(neg_growset_idx)))
+
             if self.verbosity>=2:
                 print(f'pos_growset {len(pos_growset_idx)} pos_pruneset {len(pos_pruneset_idx)}')
                 print(f'neg_growset {len(neg_growset_idx)} neg_pruneset {len(neg_pruneset_idx)}')
@@ -302,7 +307,7 @@ class IREP:
                 if self.verbosity>=2:
                     print(f"updated ruleset: {ruleset.truncstr(direction='right')}")
                     print()
-                pos_remaining_idx = pos_remaining_idx - cn.rule_covers(grown_rule, pos_remaining_idx)
+                pos_remaining_idx = pos_remaining_idx - self.cn.rule_covers(grown_rule, pos_remaining_idx)
                 if self.verbosity>=3:
                     print(f'examples remaining: {len(pos_remaining_idx)} pos, {len(neg_remaining_idx)} neg')
                     print()
