@@ -98,14 +98,6 @@ We can also ask our model to tell us why it made each positive prediction that i
 [])
 ```
 
-## What's new in version 0.2.0?
-- Major speed optimizations for model training (~10x)
-- Support for non-pandas data formats such as numpy arrays and Python iterables
-- Compatibility for sklearn's GridSearchCV
-- Guardrails for ```predict_proba``` and ```recalibrate_proba``` where training set only contains instances of a single class
-- Warnings beautification
-- Readme section describing what's new in version 0.2.0
-
 ## Issues
 If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be made more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
 
