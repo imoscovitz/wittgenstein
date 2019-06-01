@@ -28,10 +28,11 @@ $ pip uninstall wittgenstein
 ## Requirements
 - pandas
 - numpy
+- python version>=3.6
 
 ## Usage
 
-Usage syntax is similar to sklearn's. The current version, however, does require that data be passed in as a Pandas DataFrame.
+Usage syntax is similar to sklearn's.
 
 Once you have loaded and split your data...
 ```python
@@ -49,7 +50,7 @@ We can fit a ruleset classifier using RIPPER or IREP.
 <RIPPER object with fit ruleset (k=2, prune_size=0.33, dl_allowance=64)> # Hyperparameter details available in the docstrings and TDS article below
 ```
 
-Access the underlying trained model with the ruleset_ attribute. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.
+Access the underlying trained model with the ```.ruleset_``` attribute, or output it with ```.out_model()```. A ruleset is a disjunction of conjunctions -- 'V' represents 'or'; '^' represents 'and'.
 
 In other words, the model predicts positive class if any of the inner-nested condition-combinations are all true:
 ```python
@@ -76,6 +77,15 @@ To perform predictions:
 >>> ripper_clf.predict(new_data)[:5]
 [True, True, False, True, False]
 ```
+Predict class probabilities:
+```python
+>>> ripper_clf.predict_proba(test)
+array([[0.98787879, 0.01212121], # Pairs of positive and negative class probabilities
+       [0.98787879, 0.01212121],
+       [0.22222222, 0.77777778],
+       [0.8       , 0.2       ],
+       ...
+```
 We can also ask our model to tell us why it made each positive prediction that it did:
 ```python
 >>> ripper_clf.predict(new_data)[:5]
@@ -87,6 +97,14 @@ We can also ask our model to tell us why it made each positive prediction that i
 [<Rule object: [physician-fee-freeze=n]>],
 [])
 ```
+
+## What's new in version 0.2.0?
+- Major speed optimizations for model training (~10x)
+- Support for non-pandas data formats such as numpy arrays and Python iterables
+- Compatibility for sklearn's GridSearchCV
+- Guardrails for ```predict_proba``` and ```recalibrate_proba``` where training set only contains instances of a single class
+- Warnings beautification
+- Readme section describing what's new in version 0.2.0
 
 ## Issues
 If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be made more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
