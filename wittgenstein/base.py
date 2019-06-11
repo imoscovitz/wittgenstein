@@ -127,6 +127,9 @@ class Ruleset:
             while len(self.rules) > 0 and self.count_conds() > max_total_conds:
                 self.rules.pop(-1)
 
+    def trimmed_str(iterable, max_items=3):
+        return str(iterable[:max_items])[-1] + '...'
+
     def predict(self, X_df, give_reasons=False, warn=True):
         """ Predict classes of data using a fit Ruleset model.
 
@@ -161,7 +164,7 @@ class Ruleset:
                 reasons.append(example_reasons)
             return (predictions, reasons)
 
-    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1, discretize=True, bin_transformer=None):
+    def predict_proba(self, X_df, give_reasons=False):
         """ Predict probabilities for each class using a fit Ruleset model.
 
                 args:
@@ -179,40 +182,33 @@ class Ruleset:
                     a sample's class probabilities will be None if there are fewer than @param min_samples
         """
 
-        # Apply binning if necessary
-        if discretize and bin_transformer is not None:
-            df = X_df.copy()
-            df = bin_transform(df, bin_transformer)
-        else:
-            df = X_df
-
         # probas for all negative predictions
-        #print(self.uncovered_class_freqs)
         uncovered_proba = weighted_avg_freqs([self.uncovered_class_freqs])
-        uncovered_n = sum(self.uncovered_class_freqs)
+        #uncovered_n = sum(self.uncovered_class_freqs)
 
         # make predictions
-        predictions, covering_rules = self.predict(df, give_reasons=True, warn=False)
-        N = []
+        predictions, covering_rules = self.predict(X_df, give_reasons=True, warn=False)
+        #N = []
 
         # collect probas
         probas = np.empty(shape=(len(predictions),uncovered_proba.shape[0]))
         for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
-            n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
-            if (p==True) and (n < 1 or (min_samples and n < min_samples)):
-                probas[i, :] = None
-                N.append(n)
-            elif (p==False) and (uncovered_n < 1 or uncovered_n < min_samples):
-                probas[i, :] = None
-                N.append(n)
-            elif p: # pos prediction
+            #n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
+            #if (p==True) and (n < 1 or (min_samples and n < min_samples)):
+            #    probas[i, :] = None
+                #N.append(n)
+            #elif (p==False) and (uncovered_n < 1 or uncovered_n < min_samples):
+            #    probas[i, :] = None
+                #N.append(n)
+            #elif p: # pos prediction
+            if p:
                 probas[i, :] = weighted_avg_freqs([rule.class_freqs for rule in cr])
-                N.append(n)
-            else: # neg prediction
+                #N.append(n)
+            elif not p: # neg prediction
                 probas[i, :] = uncovered_proba
-                N.append(uncovered_n)
+                #N.append(uncovered_n)
         # return probas (and optional extras)
-        result = flagged_return([True, give_reasons, ret_n], [probas, covering_rules, N])
+        result = flagged_return([True, give_reasons], [probas, covering_rules])
         return result
 
     def _check_allpos_allneg(self, warn=False, warnstack=''):
@@ -339,31 +335,31 @@ class Cond:
     def num_covered(self, df):
         return len(self.covers(df))
 
-class Timer:
-    """ Simple, useful class for keeping track of how long something has been taking """
+#class Timer:
+#    """ Simple, useful class for keeping track of how long something has been taking """
 
-    def __init__(self):
-        """ Create Timer object and hit start. """
+#    def __init__(self):
+#        """ Create Timer object and hit start. """
 
-        self.start = time.time()
+#        self.start = time.time()
 
-    def buzz(self, reset=True):
-        """ Returns time elapsed since Timer was created or reset, in seconds.
+#    def buzz(self, reset=True):
+#        """ Returns time elapsed since Timer was created or reset, in seconds.
 
-            args:
-                reset (optional): whether to reset the clock.
-        """
+#            args:
+#                reset (optional): whether to reset the clock.
+#        """
 
-        last_buzz = self.start
-        now = time.time()
-        if reset:
-            self.start = now
-        return(str(int(now-last_buzz)))
+#        last_buzz = self.start
+#        now = time.time()
+#        if reset:
+#            self.start = now
+#        return(str(int(now-last_buzz)))
 
-    def stop(self):
-        """ Freeze the clock at the amount of time elapsed since Timer was created or reset. """
+#    def stop(self):
+#        """ Freeze the clock at the amount of time elapsed since Timer was created or reset. """
 
-        self.elapsed = time.time()-self.start
+#        self.elapsed = time.time()-self.start
 
 ########################################
 ##### BONUS: FUNCTIONS FOR BINNING #####
@@ -371,6 +367,9 @@ class Timer:
 
 def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
     """ Returns df with seemingly numeric features binned, and the bin_transformer or None depending on whether binning takes places. """
+
+    if n_discretize_bins is None:
+        return df, None
 
     isbinned = False
     numeric_feats = find_numeric_feats(df, ignore_feats=ignore_feats)

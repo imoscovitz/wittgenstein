@@ -13,14 +13,15 @@ import numpy as np
 
 from wittgenstein import base, base_functions
 from .base import Cond, Rule, Ruleset, bin_df
-from .base_functions import rnd, score_accuracy
+from .base_functions import score_accuracy, stop_early
 
 from .catnap import CatNap
 
 class IREP:
     """ Class for generating ruleset classification models. """
 
-    def __init__(self, prune_size=.33, max_rules=None, max_rule_conds=None, max_total_conds=None, verbosity=0):
+    def __init__(self, prune_size=.33, max_rules=None, max_rule_conds=None, max_total_conds=None,
+                 n_discretize_bins=10, verbosity=0, random_state=None):
         """ Creates a new IREP object.
 
             args:
@@ -33,13 +34,16 @@ class IREP:
                                            4: Show Rule grow/prune steps
                                            5: Show Rule grow/prune calculations
         """
-        self.POSSIBLE_HYPERPARAM_NAMES = {'prune_size','max_rules','max_rule_conds','max_total_conds'}
+        self.POSSIBLE_HYPERPARAM_NAMES = {'prune_size','max_rules','max_rule_conds','max_total_conds', 'n_discretize_bins'}
 
         self.prune_size = prune_size
         self.max_rules = max_rules
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
 
+        self.n_discretize_bins = n_discretize_bins
+
+        self.random_state = random_state
         self.verbosity = verbosity
 
     def __str__(self):
@@ -56,14 +60,11 @@ class IREP:
         else:
             print('no model fitted')
 
-    def fit(self, trainset, y=None, class_feat=None, pos_class=None, feature_names=None,
-            n_discretize_bins=10,
-            max_rules=None, max_rule_conds=None, max_total_conds=None,
-            cn_optimize=True, random_state=None):
+    def fit(self, X_or_Xy, y=None, class_feat=None, pos_class=None, feature_names=None, cn_optimize=True):
         """ Fit a Ruleset model.
 
             args:
-                trainset: categorical training dataset <pandas DataFrame, numpy array, or other Python iterable>
+                X_or_Xy: categorical training dataset <pandas DataFrame, numpy array, or other Python iterable>
                 y: class labels corresponding to trainset rows. Parameter y or class_feat (see next) must be provided.
                 class_feat: column name of class feature (Use if class feature is still in df.)
 
@@ -83,16 +84,17 @@ class IREP:
 
         # Stage 0: Setup
 
-        # Record any hyperparameters
-        self.max_rules = max_rules
-        self.max_rule_conds = max_rule_conds
-        self.max_total_conds = max_total_conds
-
         # Preprocess training data
-        df, self.class_feat, self.pos_class, self.trainset_features_, self.bin_transformer_ = base_functions.preprocess_training_data(trainset, y=y,
-                            class_feat=class_feat, pos_class=pos_class, user_requested_feature_names=feature_names,
-                            bin_transformer_=None, n_discretize_bins=n_discretize_bins,
-                            verbosity=self.verbosity)
+        preprocess_params = {'X_or_Xy':X_or_Xy,
+                             'y':y,
+                             'class_feat':class_feat,
+                             'pos_class':pos_class,
+                             #'bin_transformer':
+                             'n_discretize_bins':self.n_discretize_bins,
+                             'user_requested_feature_names':feature_names,
+                             'verbosity':self.verbosity
+                            }
+        df, self.class_feat, self.pos_class, self.bin_transformer_ = base_functions.preprocess_training_data(preprocess_params)
 
         # Create CatNap
         # possible minor speedup if pass cond_subset of only pos_class conds?
@@ -105,27 +107,26 @@ class IREP:
         neg_df = neg_df.drop(self.class_feat,axis=1)
 
         # Stage 1 (of 1): Grow Ruleset
+        if self.verbosity>=1: print('\nbuilding Ruleset...')
         self.ruleset_ = Ruleset()
         if not cn_optimize:
-            self.ruleset_ = self._grow_ruleset(pos_df, neg_df,
-            prune_size=self.prune_size, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds, random_state=random_state)
+            self.ruleset_ = self._grow_ruleset(pos_df, neg_df)
         else:
-            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df,
-            prune_size=self.prune_size, max_rules=max_rules, max_rule_conds=max_rule_conds, max_total_conds=max_total_conds, random_state=random_state)
+            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df)
 
         if self.verbosity >= 1:
-            print()
-            print('GREW RULESET:')
+            print('\nGREW RULESET:')
             self.ruleset_.out_pretty()
-            print()
 
         # Issue warning if Ruleset is universal or empty
         self.ruleset_._check_allpos_allneg(warn=True, warnstack=[('irep','fit')])
 
-        # Set selected features
+        # Set selected and trainset features
         self.selected_features_ = self.ruleset_.get_selected_features()
+        self.trainset_features_ = df.drop(self.class_feat,axis=1).columns.tolist()
 
         # Fit probas
+        #if self.verbosity>=1: print('\ncalibrating probas for predict_proba...\n')
         self.recalibrate_proba(df, min_samples=None, require_min_samples=False, discretize=False)
 
         # Cleanup
@@ -151,7 +152,19 @@ class IREP:
         if not hasattr(self, 'ruleset_'):
             raise AttributeError('You should fit an IREP object with .fit method before making predictions with it.')
 
-        X_df = base_functions.preprocess_prediction_data(X, trainset_features=self.trainset_features_, model_selected_features=self.selected_features_, bin_transformer_=self.bin_transformer_, user_requested_feature_names=feature_names, verbosity=0)
+        # Preprocess prediction data
+        preprocess_params = {'X':X,
+                             'class_feat':self.class_feat,
+                             'pos_class':self.pos_class,
+                             'bin_transformer_':self.bin_transformer_,
+
+                             'user_requested_feature_names':feature_names,
+                             'selected_features_':self.selected_features_,
+                             'trainset_features_':self.trainset_features_,
+                             'verbosity':self.verbosity
+                            }
+
+        X_df = base_functions.preprocess_prediction_data(preprocess_params)
 
         return self.ruleset_.predict(X_df, give_reasons=give_reasons)
 
@@ -171,12 +184,28 @@ class IREP:
         actuals = [yi==self.pos_class for yi in base_functions.aslist(y)]
         return score_function(actuals, predictions)
 
-    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1, discretize=True):
-        # Drop class feature if user forgot to:
-        df = X_df if self.class_feat not in X_df.columns else X_df.drop(self.class_feat, axis=1)
-        return self.ruleset_.predict_proba(df, give_reasons=give_reasons, ret_n=ret_n, min_samples=min_samples, discretize=True, bin_transformer=self.bin_transformer_)
+    def predict_proba(self, X, feature_names=None, give_reasons=False):
 
-    def recalibrate_proba(self, Xy, min_samples=20, require_min_samples=True, discretize=True):
+        if not hasattr(self, 'ruleset_'):
+            raise AttributeError('You should fit an IREP object with .fit method before making predictions with it.')
+
+        # Preprocess prediction data
+        preprocess_params = {'X':X,
+                             'class_feat':self.class_feat,
+                             'pos_class':self.pos_class,
+                             'bin_transformer_':self.bin_transformer_,
+
+                             'user_requested_feature_names':feature_names,
+                             'selected_features_':self.selected_features_,
+                             'trainset_features_':self.trainset_features_,
+                             'verbosity':self.verbosity
+                            }
+
+        X_df = base_functions.preprocess_prediction_data(preprocess_params)
+
+        return self.ruleset_.predict_proba(X_df, give_reasons=give_reasons)
+
+    def recalibrate_proba(self, X_or_Xy, y=None, feature_names=None, min_samples=20, require_min_samples=True, discretize=True):
         """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
             Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
@@ -193,8 +222,23 @@ class IREP:
                                           default=True
         """
 
+        # Preprocess training data
+        preprocess_params = {'X_or_Xy':X_or_Xy,
+                             'y':y,
+                             'class_feat':self.class_feat,
+                             'pos_class':self.pos_class,
+                             'bin_transformer_':self.bin_transformer_ if discretize else None,
+
+                             'user_requested_feature_names':feature_names,
+                             'min_samples':min_samples,
+                             'require_min_samples':require_min_samples,
+                             'verbosity':self.verbosity
+                            }
+
+        df = base_functions._preprocess_recalibrate_proba_data(preprocess_params)
+
         # Recalibrate
-        base_functions.recalibrate_proba(self.ruleset_, Xy_df=Xy, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples, discretize=discretize, bin_transformer=self.bin_transformer_)
+        base_functions.recalibrate_proba(self.ruleset_, Xy_df=df, class_feat=self.class_feat, pos_class=self.pos_class, min_samples=min_samples, require_min_samples=require_min_samples)
 
     def get_params(self, deep=True):
         return {param:self.__dict__.get(param) for param in self.POSSIBLE_HYPERPARAM_NAMES}
@@ -204,13 +248,13 @@ class IREP:
             setattr(self, parameter, value)
         return self
 
-    def _grow_ruleset(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
+    def _grow_ruleset(self, pos_df, neg_df):
         """ Grow a Ruleset with (optional) pruning. """
 
         ruleset = Ruleset()
         ruleset._set_possible_conds(pos_df, neg_df)
 
-        if not prune_size: prune_size = 0 # If not pruning, use all the data for growing
+        prune_size = self.prune_size if self.prune_size is not None else 0 # If not pruning, use all the data for growing
         pos_remaining = pos_df.copy()
         neg_remaining = neg_df.copy()
         self.rules = []
@@ -219,19 +263,19 @@ class IREP:
         while (len(pos_remaining) > 0):
 
             # If applicable, check for user-specified early stopping
-            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds):
+            if stop_early(ruleset, self.max_rules, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
-            pos_growset, pos_pruneset = base_functions.df_shuffled_split(pos_remaining, (1-prune_size), random_state=random_state)
-            neg_growset, neg_pruneset = base_functions.df_shuffled_split(neg_remaining, (1-prune_size), random_state=random_state)
+            pos_growset, pos_pruneset = base_functions.df_shuffled_split(pos_remaining, (1-prune_size), random_state=self.random_state)
+            neg_growset, neg_pruneset = base_functions.df_shuffled_split(neg_remaining, (1-prune_size), random_state=self.random_state)
             if self.verbosity>=2:
                 print(f'pos_growset {len(pos_growset)} pos_pruneset {len(pos_pruneset)}')
                 print(f'neg_growset {len(neg_growset)} neg_pruneset {len(neg_pruneset)}')
                 if not prune_size: print(f'(pruning is turned off)')
 
             # Grow Rule
-            grown_rule = base_functions.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=max_rule_conds, verbosity=self.verbosity)
+            grown_rule = base_functions.grow_rule(pos_growset, neg_growset, ruleset.possible_conds, max_rule_conds=self.max_rule_conds, verbosity=self.verbosity)
 
             # If not pruning, add Rule to Ruleset and drop only the covered positive examples
             if not prune_size:
@@ -265,19 +309,19 @@ class IREP:
                         print()
 
         # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=max_total_conds)
+        ruleset.trim_conds(max_total_conds=self.max_total_conds)
 
         # Return new ruleset
         return ruleset
 
-    def _grow_ruleset_cn(self, pos_df, neg_df, prune_size, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None, verbosity=0):
+    def _grow_ruleset_cn(self, pos_df, neg_df):
         """ Grow a Ruleset with (optional) pruning. """
 
         ruleset = Ruleset()
         ruleset.possible_conds = self.cn.conds
         #ruleset._set_possible_conds(pos_df, neg_df)
 
-        if not prune_size: prune_size = 0 # If not pruning, use all the data for growing
+        prune_size = self.prune_size if self.prune_size is not None else 0 # If not pruning, use all the data for growing
         pos_remaining_idx = set(pos_df.index.tolist())
         neg_remaining_idx = set(neg_df.index.tolist())
         #self.rules = []
@@ -286,12 +330,12 @@ class IREP:
         while (len(pos_remaining_idx) > 0):
 
             # If applicable, check for user-specified early stopping
-            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds):
+            if stop_early(ruleset, self.max_rules, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
-            pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(pos_remaining_idx, (1-prune_size), random_state=random_state)
-            neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(neg_remaining_idx, (1-prune_size), random_state=random_state)
+            pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(pos_remaining_idx, (1-prune_size), random_state=self.random_state)
+            neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(neg_remaining_idx, (1-prune_size), random_state=self.random_state)
 
             if self.verbosity>=2:
                 print(f'pos_growset {len(pos_growset_idx)} pos_pruneset {len(pos_pruneset_idx)}')
@@ -299,7 +343,7 @@ class IREP:
                 if not prune_size: print(f'(pruning is turned off)')
 
             # Grow Rule
-            grown_rule = base_functions.grow_rule_cn(self.cn, pos_growset_idx, neg_growset_idx, initial_rule=Rule(), max_rule_conds=max_rule_conds, verbosity=self.verbosity)
+            grown_rule = base_functions.grow_rule_cn(self.cn, pos_growset_idx, neg_growset_idx, initial_rule=Rule(), max_rule_conds=self.max_rule_conds, verbosity=self.verbosity)
 
             # If not pruning, add Rule to Ruleset and drop only the covered positive examples
             if not prune_size:
@@ -333,7 +377,7 @@ class IREP:
                         print()
 
         # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=max_total_conds)
+        ruleset.trim_conds(max_total_conds=self.max_total_conds)
 
         # Return new ruleset
         return ruleset

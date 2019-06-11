@@ -10,6 +10,7 @@ class CatNap:
     """
     def __init__(self, df_or_arr, columns=None, feat_subset=None, cond_subset=None, class_feat=None, pos_class=None):
         df = pd.DataFrame(df_or_arr)
+
         if columns:
             df.columns = columns
 
