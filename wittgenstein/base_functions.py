@@ -606,6 +606,31 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
     # ALL DONE
     return df
 
+def _preprocess_y_score_data(y):
+    """ Return python iterable of y values """
+
+    def raise_wrong_ndim():
+        raise IndexError(f'y input data has wrong number dimensions. It should have 1.')
+
+    # If it's pandas or np...
+    if hasattr(y, 'ndim'):
+        if y.ndim==1:
+            return y.tolist()
+        else:
+            raise_wrong_ndim()
+
+    # Otherwise try for python iterable
+    if hasattr(y, '__getitem__'):
+        # No super clean way to check for 1D, but this should be pretty good
+        if any([hasattr(item, '__getitem__') and type(item) is not str for item in y]):
+            raise_wrong_ndim()
+        else:
+            return y
+
+    # Otherwise, no idea what's going on
+    else:
+        raise TypeError(f'Could not identify valid type for y input data: {type(y)}. Recommended types are 1D python iterable, pandas Series, or 1D numpy array.')
+
 def _check_valid_input_data(X_or_Xy, y=None, class_feat=None, requires_label=True):
 
     # Make sure there is data
@@ -696,7 +721,6 @@ def _try_bin_fit_or_fittransform_(df, ignore_feats=[], n_discretize_bins=None, b
     # Binning has already been fit
     if bin_transformer_:
         bin_transform(df, bin_transformer_)
-        print(df)
         return df, bin_transformer_
 
     # Binning disabled

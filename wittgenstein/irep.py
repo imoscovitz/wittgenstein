@@ -181,7 +181,7 @@ class IREP:
         """
 
         predictions = self.predict(X)
-        actuals = [yi==self.pos_class for yi in base_functions.aslist(y)]
+        actuals = [yi==self.pos_class for yi in base_functions._preprocess_y_score_data(y)]
         return score_function(actuals, predictions)
 
     def predict_proba(self, X, feature_names=None, give_reasons=False):
