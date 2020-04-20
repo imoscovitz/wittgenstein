@@ -32,32 +32,32 @@ class IREP:
         random_state=None,
         verbosity=0,
     ):
-        """ Creates a new IREP object.
+        """Creates a new IREP object.
 
-            Parameters
-            ----------
-            prune_size : int, default=.33
-                proportion of training set to be used for pruning. Set to None to skip pruning (not recommended).
-            n_discretize_bins : int, default=10
-                Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
+        Parameters
+        ----------
+        prune_size : int, default=.33
+            Proportion of training set to be used for pruning. Set to None to skip pruning (not recommended).
+        n_discretize_bins : int, default=10
+            Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
 
-            limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
-            max_rules : int, default=None
-                maximum number of rules.
-            max_rule_conds : int, default=None
-                maximum number of conds per rule.
-            max_total_conds : int, default=None
-                maximum number of total conds in entire ruleset.
+        Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
+        max_rules : int, default=None
+            Maximum number of rules.
+        max_rule_conds : int, default=None
+            Maximum number of conds per rule.
+        max_total_conds : int, default=None
+            Maximum number of total conds in entire ruleset.
 
-            random_state : int, default=None
-                random seed for supporting repeatable results.
-            verbosity : int, default=0
-                output progress, model development, and/or computation. each level includes the information belonging to lower-value levels.
-                   1: Show results of each major phase
-                   2: Show Ruleset grow/optimization steps
-                   3: Show Ruleset grow/optimization calculations
-                   4: Show Rule grow/prune steps
-                   5: Show Rule grow/prune calculations
+        random_state : int, default=None
+            Random seed for repeatable results.
+        verbosity : int, default=0
+            Output progress, model development, and/or computation. Each level includes the information belonging to lower-value levels.
+               1: Show results of each major phase
+               2: Show Ruleset grow/optimization steps
+               3: Show Ruleset grow/optimization calculations
+               4: Show Rule grow/prune steps
+               5: Show Rule grow/prune calculations
 
         """
         self.VALID_HYPERPARAMETERS = {
@@ -78,7 +78,7 @@ class IREP:
         self.verbosity = verbosity
 
     def __str__(self):
-        """ Returns string representation of an IREP object. """
+        """Returns string representation of an IREP object."""
         params = str(self.get_params()) + ">"
         params = (
             params.replace(": ", "=")
@@ -91,7 +91,7 @@ class IREP:
     __repr__ = __str__
 
     def out_model(self):
-        """ Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'. """
+        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
         if hasattr(self, "ruleset_"):
             self.ruleset_.out_pretty()
         else:
@@ -113,31 +113,31 @@ class IREP:
         Parameters
         ----------
         trainset : DataFrame, numpy array, or other iterable
-            training dataset. Optional whether to include or exclude class labels column.
-        y : str, int, bool
-            class labels corresponding to trainset rows. Use if class labels aren't included in trainset.
-        class_feat: str
-            column name of class feature. Use if class feature is still in trainset.
+            Training dataset. Optional whether to include or exclude class labels column.
+        y : iterable of str, int, bool
+            Class labels corresponding to trainset rows. Use if class labels aren't included in trainset.
+        class_feat: str, int
+            Column name or index of class feature. Use if class feature is still in trainset.
         pos_class : str, optional for boolean target, default=1 or True
-            name of positive class
+            Name of positive class.
         feature_names : list<str>, optional, default=None
-            specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
+            Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
         cn_optimize : bool, default=True
-            use algorithmic speed optimization
+            Use algorithmic speed optimization.
 
         **kwargs
-            The following parameters are moving to the IREP constructor (__init__) function. For the time-being, both the constructor and fit functions support them, but passing them here using .fit will be deprecated:
+            The following parameters are moving to the IREP constructor (__init__) function. For the time-being, both the constructor and fit functions will accept them, but passing them here using .fit will be deprecated:
 
             n_discretize_bins : int, default=10
                 Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
             random_state: int, default=None
-                random seed for supporting repeatable results.
+                Random seed for supporting repeatable results.
             max_rules : int, default=None
-                maximum number of rules.
+                Maximum number of rules.
             max_rule_conds : int, default=None
-                maximum number of conds per rule.
+                Maximum number of conds per rule.
             max_total_conds : int, default=None
-                maximum number of total conds in entire ruleset.
+                Maximum number of total conds in entire ruleset.
         """
 
         # Stage 0: Setup
@@ -212,27 +212,28 @@ class IREP:
             del self.cn
 
     def predict(self, X, give_reasons=False, feature_names=None):
-        """ Predict classes of data using a IREP-fit model.
+        """Predict classes using a fit model.
 
-            Parameters
-            ----------
-                X: DataFrame, numpy array, or other iterable
-                    examples to make predictions on. All selected features of the model should be present.
+        Parameters
+        ----------
+            X: DataFrame, numpy array, or other iterable
+                examples to make predictions on. All selected features of the model should be present.
 
-                give_reasons : bool, default=False
-                    whether to provide reasons for each prediction made.
-                feature_names : list<str>, default=None
-                    specify feature names for X to orient X's features with selected features.
+            give_reasons : bool, default=False
+                Whether to provide reasons for each prediction made.
+            feature_names : list<str>, default=None
+                Specify feature names for X to orient X's features with selected features.
 
-            Returns
-            -------
-            list<bool>
-                predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
+        Returns
+        -------
+        list<bool>
+            Predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
 
-            or, if give_reasons=True
-            tuple< list<bool>, <list<list<Rule>> >
-                tuple containing list of predictions and a list of the corresponding reasons for each prediction--
-                for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
+        Or, if give_reasons=True, returns
+
+        tuple<list<bool>, <list<list<Rule>>>
+            Tuple containing list of predictions and a list of the corresponding reasons for each prediction --
+            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
         if not hasattr(self, "ruleset_"):
@@ -257,16 +258,16 @@ class IREP:
         return self.ruleset_.predict(X_df, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
-        """ Score the performance of a fit model.
+        """Score the performance of a fit model.
 
-            X : DataFrame, numpy array, or other iterable
-                examples to score.
-            y : Series, numpy array, or other iterable
-                class label actuals.
+        X : DataFrame, numpy array, or other iterable
+            Examples to score.
+        y : Series, numpy array, or other iterable
+            Class label actuals.
 
-            score_function : function, default=score_accuracy
-                any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
-                this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
+        score_function : function, default=score_accuracy
+            Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
+            this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
 
         predictions = self.predict(X)
@@ -276,27 +277,27 @@ class IREP:
         return score_function(actuals, predictions)
 
     def predict_proba(self, X, give_reasons=False, feature_names=None):
-        """ Predict class probabilities of data using a fit model.
+        """Predict class probabilities of data using a fit model.
 
-            Parameters
-            ----------
-                X: DataFrame, numpy array, or other iterable
-                    examples to make predictions on. All selected features of the model should be present.
+        Parameters
+        ----------
+            X: DataFrame, numpy array, or other iterable
+                examples to make predictions on. All selected features of the model should be present.
 
-                give_reasons : bool, default=False
-                    whether to provide reasons for each prediction made.
-                feature_names : list<str>, default=None
-                    specify feature names for X to orient X's features with selected features.
+            give_reasons : bool, default=False
+                whether to provide reasons for each prediction made.
+            feature_names : list<str>, default=None
+                specify feature names for X to orient X's features with selected features.
 
-            Returns
-            -------
-            array
-                predicted class label probabilities for each row of X, ordered neg, pos. True indicates positive predicted class; False non-positive class.
+        Returns
+        -------
+        array
+            predicted class label probabilities for each row of X, ordered neg, pos. True indicates positive predicted class; False non-positive class.
 
-            or, if give_reasons=True:
-            tuple< array, <list<list<Rule>> >
-                tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
-                for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
+        or, if give_reasons=True:
+        tuple< array, <list<list<Rule>> >
+            tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
+            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
         if not hasattr(self, "ruleset_"):
@@ -329,22 +330,22 @@ class IREP:
         require_min_samples=True,
         discretize=True,
     ):
-        """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
-            Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
+        """Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
+        Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
-            Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
-            Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+        Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
+        Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
-            Xy: labeled data
+        Xy: labeled data
 
-            min_samples : int, default=20
-                required minimum number of samples per Rule
-                Use None to ignore minimum sampling requirement so long as at least one sample exists.
-            require_min_samples : bool, default=True
-                True: halt (with warning) in case min_samples not achieved for all Rules
-                False: warn, but still replace Rules that have enough samples
-            discretize : bool, default=True
-                If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
+        min_samples : int, default=20
+            Required minimum number of samples per Rule.
+            Use None to ignore minimum sampling requirement so long as at least one sample exists.
+        require_min_samples : bool, default=True
+            True: halt (with warning) in case min_samples not achieved for all Rules
+            False: warn, but still replace Rules that have enough samples
+        discretize : bool, default=True
+            If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
         """
 
         # Preprocess training data
@@ -383,7 +384,7 @@ class IREP:
         return self
 
     def _grow_ruleset(self, pos_df, neg_df):
-        """ Grow a Ruleset with (optional) pruning. """
+        """Grow a Ruleset with (optional) pruning."""
 
         ruleset = Ruleset()
         ruleset._set_possible_conds(pos_df, neg_df)
@@ -480,7 +481,7 @@ class IREP:
         return ruleset
 
     def _grow_ruleset_cn(self, pos_df, neg_df):
-        """ Grow a Ruleset with (optional) pruning. """
+        """Grow a Ruleset with (optional) pruning."""
 
         ruleset = Ruleset()
         ruleset.possible_conds = self.cn.conds
@@ -586,11 +587,11 @@ class IREP:
         return ruleset
 
 
-##### Metric #####
+##### Metrics #####
 
 
 def _IREP_prune_metric(self, pos_pruneset, neg_pruneset):
-    """ Returns the prune value of a candidate Rule """
+    """Returns the prune value of a candidate Rule."""
 
     P = len(pos_pruneset)
     N = len(neg_pruneset)
@@ -600,7 +601,7 @@ def _IREP_prune_metric(self, pos_pruneset, neg_pruneset):
 
 
 def _IREP_prune_metric_cn(cn, rule, pos_idxs, neg_idxs):
-    """ Returns the prune value of a candidate Rule """
+    """Returns the prune value of a candidate Rule."""
 
     P = len(pos_idxs)
     N = len(neg_idxs)

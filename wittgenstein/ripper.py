@@ -40,20 +40,36 @@ class RIPPER:
         Parameters
         ----------
         k : int, default=2
-            number of RIPPERk optimization iterations
+            Number of RIPPERk optimization iterations.
         prune_size : float, default=.33
-            proportion of training set to be used for pruning (default=.33)
+            Proportion of training set to be used for pruning.
         dl_allowance : int, default=64
-            terminate Ruleset grow phase early if a Ruleset description length is encountered
+            Terminate Ruleset grow phase early if a Ruleset description length is encountered
             that is more than this amount above the lowest description length so far encountered.
-        verbosity : int, default=0:
-            output information about the training process:
+        n_discretize_bins : int, default=10
+            Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
+        random_state : int, default=None
+            Random seed for repeatable results.
+
+        Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
+        max_rules : int, default=None
+            Maximum number of rules.
+        max_rule_conds : int, default=None
+            Maximum number of conds per rule.
+        max_total_conds : int, default=None
+            Maximum number of total conds in entire ruleset.
+
+        verbosity : int, default=0
+            Output progress, model development, and/or computation. Each level includes the information belonging to lower-value levels.
                1: Show results of each major phase
                2: Show Ruleset grow/optimization steps
                3: Show Ruleset grow/optimization calculations
                4: Show Rule grow/prune steps
                5: Show Rule grow/prune calculations
         """
+
+
+
         self.VALID_HYPERPARAMETERS = {
             "k",
             "dl_allowance",
@@ -76,7 +92,7 @@ class RIPPER:
         self.verbosity = verbosity
 
     def __str__(self):
-        """ Returns string representation of a RIPPER object. """
+        """Returns string representation of a RIPPER object."""
         params = str(self.get_params()) + ">"
         params = (
             params.replace(": ", "=")
@@ -89,7 +105,7 @@ class RIPPER:
     __repr__ = __str__
 
     def out_model(self):
-        """ Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'. """
+        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
         if hasattr(self, "ruleset_"):
             self.ruleset_.out_pretty()
         else:
@@ -99,36 +115,42 @@ class RIPPER:
         self,
         trainset,
         y=None,
-        columns=None,
         class_feat=None,
         pos_class=None,
         feature_names=None,
-        n_discretize_bins=10,
-        max_rules=None,
-        max_rule_conds=None,
-        max_total_conds=None,
         cn_optimize=True,
-        random_state=None,
+        **kwargs,
     ):
-        """ Fit a Ruleset model.
+        """Fit a Ruleset model.
 
-        args:
-            trainset: categorical training dataset <pandas DataFrame, numpy array, or other Python iterable>
-            y: class labels corresponding to trainset rows. Parameter y or class_feat (see next) must be provided.
-            class_feat: column name of class feature (Use if class feature is still in df.)
+        Parameters
+        ----------
+        trainset : DataFrame, numpy array, or other iterable
+            Training dataset. Optional whether to include or exclude class labels column.
+        y : iterable of str, int, bool
+            Class labels corresponding to trainset rows. Use if class labels aren't included in trainset.
+        class_feat: str, int
+            Column name or index of class feature. Use if class feature is still in trainset.
+        pos_class : str, optional for boolean target, default=1 or True
+            Name of positive class.
+        feature_names : list<str>, optional, default=None
+            Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
+        cn_optimize : bool, default=True
+            Use algorithmic speed optimization.
 
-            columns (optional): if trainset inputted as non-DataFrame iterable (such as numpy array), sets feature names. If None, feature for iterables will be set to column indices. (default=None)
-            pos_class (optional): name of positive class. If not provided, defaults to class of first training example.
-            n_discretize_bins (optional): Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range.
-                                          Setting to smaller values can improve training speed.
-                                          Pass None to disable auto-discretization and treat values as categorical. (default=10)
-            random_state: (optional) random state to allow for repeatable results
+        **kwargs
+            The following parameters are moving to the RIPPER constructor (__init__) function. For the time-being, both the constructor and fit functions will accept them, but passing them here using .fit will be deprecated:
 
-            options to stop early. Intended for improving model interpretability or limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
-            Note: small max_rule_conds may result in the k-optimizations stage making fewer changes.
-            max_rules (optional): maximum number of rules. default=None
-            max_rule_conds (optional): maximum number of conds per rule. default=None
-            max_total_conds (optional): maximum number of total conds in entire ruleset. default=None
+            n_discretize_bins : int, default=10
+                Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
+            random_state: int, default=None
+                Random seed for supporting repeatable results.
+            max_rules : int, default=None
+                Maximum number of rules.
+            max_rule_conds : int, default=None
+                Maximum number of conds per rule.
+            max_total_conds : int, default=None
+                Maximum number of total conds in entire ruleset.
         """
 
         ################
@@ -328,19 +350,28 @@ class RIPPER:
             del self.cn
 
     def predict(self, X, give_reasons=False, feature_names=None):
-        """ Predict classes of data using a RIPPER-fit model.
+        """Predict classes using a fit model.
 
-            args:
-                X: examples to make predictions on
+        Parameters
+        ----------
+            X: DataFrame, numpy array, or other iterable
+                examples to make predictions on. All selected features of the model should be present.
 
-                give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+            give_reasons : bool, default=False
+                Whether to provide reasons for each prediction made.
+            feature_names : list<str>, default=None
+                Specify feature names for X to orient X's features with selected features.
 
-            returns:
-                list of <bool> values corresponding to examples. True indicates positive predicted class; False non-positive class.
+        Returns
+        -------
+        list<bool>
+            Predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
 
-                If give_reasons is True, returns a tuple that contains the above list of predictions
-                    and a list of the corresponding reasons for each prediction;
-                    for each positive prediction, gives a list of all the covering Rules, for negative predictions, an empty list.
+        Or, if give_reasons=True, returns
+
+        tuple<list<bool>, <list<list<Rule>>>
+            Tuple containing list of predictions and a list of the corresponding reasons for each prediction --
+            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
         if not hasattr(self, "ruleset_"):
@@ -360,15 +391,16 @@ class RIPPER:
         return self.ruleset_.predict(X_df, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
-        """ Test performance of a RIPPER-fit model.
+        """Score the performance of a fit model.
 
-            X: 2-D independent attributes values
-            y: 1-D corresponding target values
+        X : DataFrame, numpy array, or other iterable
+            Examples to score.
+        y : Series, numpy array, or other iterable
+            Class label actuals.
 
-            score_function (optional): function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>,
-                                       containing class values. (default=accuracy)
-                                       this parameter is intended to be compatible with sklearn's scoring functions:
-                                       https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
+        score_function : function, default=score_accuracy
+            Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
+            this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
 
         predictions = self.predict(X)
@@ -376,6 +408,28 @@ class RIPPER:
         return score_function(actuals, predictions)
 
     def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1):
+        """Predict class probabilities of data using a fit model.
+
+        Parameters
+        ----------
+            X: DataFrame, numpy array, or other iterable
+                examples to make predictions on. All selected features of the model should be present.
+
+            give_reasons : bool, default=False
+                whether to provide reasons for each prediction made.
+            feature_names : list<str>, default=None
+                specify feature names for X to orient X's features with selected features.
+
+        Returns
+        -------
+        array
+            predicted class label probabilities for each row of X, ordered neg, pos. True indicates positive predicted class; False non-positive class.
+
+        or, if give_reasons=True:
+        tuple< array, <list<list<Rule>> >
+            tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
+            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
+        """
         # Drop class feature if user forgot to:
         df = (
             X_df
@@ -400,22 +454,22 @@ class RIPPER:
         require_min_samples=True,
         discretize=True,
     ):
-        """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
-            Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
+        """Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
+        Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
-            Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
-            Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+        Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
+        Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
-            Xy: labeled data
+        Xy: labeled data
 
-            min_samples : int, default=20
-                required minimum number of samples per Rule
-                Use None to ignore minimum sampling requirement so long as at least one sample exists.
-            require_min_samples : bool, default=True
-                True: halt (with warning) in case min_samples not achieved for all Rules
-                False: warn, but still replace Rules that have enough samples
-            discretize : bool, default=True
-                If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
+        min_samples : int, default=20
+            Required minimum number of samples per Rule.
+            Use None to ignore minimum sampling requirement so long as at least one sample exists.
+        require_min_samples : bool, default=True
+            True: halt (with warning) in case min_samples not achieved for all Rules
+            False: warn, but still replace Rules that have enough samples
+        discretize : bool, default=True
+            If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
         """
 
         # Preprocess training data
@@ -444,7 +498,7 @@ class RIPPER:
         )
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
-        """ Precalculate rule theory dls for various-sized rules. """
+        """Precalculate rule theory dls for various-sized rules."""
 
         self.dl_dict = {}
 
@@ -473,7 +527,7 @@ class RIPPER:
         max_total_conds=None,
         random_state=None,
     ):
-        """ Grow a Ruleset with pruning. """
+        """Grow a Ruleset with pruning."""
         pos_remaining = pos_df.copy()
         neg_remaining = neg_df.copy()
 
@@ -607,7 +661,7 @@ class RIPPER:
         max_total_conds=None,
         random_state=None,
     ):
-        """ Grow a Ruleset with pruning. """
+        """Grow a Ruleset with pruning."""
 
         # Initialize new Ruleset
         if initial_ruleset is None:
@@ -741,7 +795,7 @@ class RIPPER:
         max_rule_conds=None,
         random_state=None,
     ):
-        """ Optimization phase. """
+        """Optimization phase."""
 
         if self.verbosity >= 2:
             print("optimizing ruleset...")
@@ -931,7 +985,7 @@ class RIPPER:
         max_rule_conds=None,
         random_state=None,
     ):
-        """ Optimization phase. """
+        """Optimization phase."""
 
         if self.verbosity >= 2:
             print("optimizing ruleset...")
@@ -1138,7 +1192,7 @@ class RIPPER:
         max_total_conds=None,
         random_state=None,
     ):
-        """ Stage 3: Post-optimization, cover any remaining uncovered positives. """
+        """Stage 3: Post-optimization, cover any remaining uncovered positives."""
         pos_remaining, neg_remaining = base_functions.pos_neg_split(
             df, self.class_feat, self.pos_class
         )
@@ -1178,7 +1232,7 @@ class RIPPER:
         max_total_conds=None,
         random_state=None,
     ):
-        """ Stage 3: Post-optimization, cover any remaining uncovered positives. """
+        """Stage 3: Post-optimization, cover any remaining uncovered positives."""
         pos_remaining_idx, neg_remaining_idx = self.cn.pos_idx_neg_idx(
             df, self.class_feat, self.pos_class
         )
@@ -1216,104 +1270,18 @@ class RIPPER:
         return self
 
 
-#### HELPER Class #####
-
-
-class RSStats:
-    def __init__(self, ruleset=None):
-        self.subset_dls = []
-        self.ruleset = Ruleset() if ruleset is None else copy.deepcopy(ruleset)
-
-
-class RulesetStats:
-    # This class is not used in the current implementation but could come in handy for future optimization
-    # by storing and retreiving calculations that may be repeated.
-    # Haven't incorporated it because there are bigger fish to fry, optimization-wise.
-    def __init__(self, ruleset=None):
-        self.subset_dls = []
-        self.ruleset = Ruleset() if ruleset is None else ruleset
-        self.dl = 0
-
-    def update(self, ruleset, possible_conds, pos_df, neg_df, verbosity=0):
-
-        # Find first mismatching rule index
-        # If there is no mismatch, return
-        # If there is a mismatch, update self.ruleset and wipe subsequent dls
-        index = 0
-        while (
-            index < len(self.ruleset)
-            and index < len(ruleset)
-            and self.ruleset[index] == ruleset[index]
-        ):
-            index += 1
-        if index == len(ruleset) and index == len(self.ruleset):
-            if verbosity >= 4:
-                print(f"not updating stats -- no ruleset change found")
-            return
-        if verbosity >= 4:
-            print(f"updating stats from index {index}")
-        self.ruleset.rules[index:] = ruleset[index:]
-        self.subset_dls = self.subset_dls[:index]
-
-        # Beginning with index, update subset dls
-        for i in range(index, len(ruleset)):
-            rule = ruleset[i]
-            subset = Ruleset(ruleset.rules[: i + 1])
-            subset_dl = _rs_total_bits(
-                subset, possible_conds, pos_df, neg_df, verbosity=verbosity
-            )
-            self.subset_dls.append(subset_dl)
-
-        self.dl = self.subset_dls[-1]
-
-    def dl_change(self, index):
-        return self.subset_dls[index] - self.subset_dls[index - 1]
-
-    def potential_dl_stats(
-        self,
-        possible_conds,
-        pos_df,
-        neg_df,
-        ret_ruleset=True,
-        ret_dl=False,
-        verbosity=0,
-    ):
-        if not any((ret_ruleset, ret_dl)):
-            raise ValueError(
-                "method dl_pruned_ruleset called without any return values specified"
-            )
-
-        tempStats = copy.deepcopy(self)
-        i = len(tempStats.ruleset) - 1
-        while i > 0:
-            if tempStats.dl_change(i) > 0:
-                if verbosity >= 4:
-                    print(f"rule {i} raised dl -- removing")
-                tempStats.update(
-                    Ruleset(tempStats.ruleset[:i] + tempStats.ruleset[i + 1 :]),
-                    possible_conds,
-                    pos_df,
-                    neg_df,
-                )
-                if verbosity >= 4:
-                    print(f"new ruleset is {tempStats.ruleset}")
-            i -= 1
-
-        return tempStats
-
-
 ###################################
 ##### RIPPER-specific Metrics #####
 ###################################
 
 
 def _RIPPER_growphase_prune_metric(rule, pos_pruneset, neg_pruneset):
-    """ RIPPER/IREP* prune metric.
-        Returns the prune value of a candidate Rule.
+    """RIPPER/IREP* prune metric.
+    Returns the prune value of a candidate Rule.
 
-        Cohen's formula is (p-n) / (p+n).
-        Unclear from the paper how they handle divzero (where p+n=0), so I Laplaced it.
-        Weka's solution was to modify the formula to (p+1)/(p+n+2), but the (non-NaN) values I got appeared closer to those of the original formula.
+    Cohen's formula is (p-n) / (p+n).
+    Unclear from the paper how they handle divzero (where p+n=0), so I Laplaced it.
+    Weka's solution was to modify the formula to (p+1)/(p+n+2), but running with this because the (non-NaN) values I got appeared closer to those of the original formula.
     """
     # I imagine Weka's is 1/2 because that's closer to a 50-50 class distribution?
     p = rule.num_covered(pos_pruneset)
@@ -1322,12 +1290,12 @@ def _RIPPER_growphase_prune_metric(rule, pos_pruneset, neg_pruneset):
 
 
 def _RIPPER_growphase_prune_metric_cn(cn, rule, pos_pruneset_idx, neg_pruneset_idx):
-    """ RIPPER/IREP* prune metric.
-        Returns the prune value of a candidate Rule.
+    """RIPPER/IREP* prune metric.
+    Returns the prune value of a candidate Rule.
 
-        Cohen's formula is (p-n) / (p+n).
-        Unclear from the paper how they handle divzero (where p+n=0), so I Laplaced it.
-        Weka's solution was to modify the formula to (p+1)/(p+n+2), but the (non-NaN) values I got appeared closer to those of the original formula.
+    Cohen's formula is (p-n) / (p+n).
+    Unclear from the paper how they handle divzero (where p+n=0), so I Laplaced it.
+    Weka's solution was to modify the formula to (p+1)/(p+n+2), but the (non-NaN) values I got appeared closer to those of the original formula.
     """
     # I imagine Weka's is 1/2 because that's closer to a 50-50 class distribution?
     p = len(cn.rule_covers(rule, pos_pruneset_idx))
@@ -1346,7 +1314,7 @@ def _RIPPER_optimization_prune_metric_cn(cn, rule, pos_pruneset_idx, neg_prunese
 
 
 def _r_theory_bits(rule, possible_conds, bits_dict=None, verbosity=0):
-    """ Returns description length (in bits) for a single Rule. """
+    """Returns description length (in bits) for a single Rule."""
 
     if hasattr(rule, "dl"):
         return rule.dl
@@ -1372,11 +1340,10 @@ def _r_theory_bits(rule, possible_conds, bits_dict=None, verbosity=0):
 
 
 def _rs_theory_bits(ruleset, possible_conds, verbosity=0):
-    """ Returns theory description length (in bits) for a Ruleset. """
+    """Returns theory description length (in bits) for a Ruleset."""
 
     # if type(ruleset) != Ruleset:
     #    raise TypeError(f'param ruleset in _rs_theory_bits should be type Ruleset')
-    """ Returns sum of theory bits for each Rule in ruleset """
     total = 0
     for rule in ruleset.rules:
         total += _r_theory_bits(rule, possible_conds, verbosity=verbosity)
@@ -1390,7 +1357,7 @@ def _rs_theory_bits(ruleset, possible_conds, verbosity=0):
 
 
 def _exceptions_bits(ruleset, pos_df, neg_df, verbosity=0):
-    """ Returns description length (in bits) for exceptions to a Ruleset's coverage. """
+    """Returns description length (in bits) for exceptions to a Ruleset's coverage."""
 
     if type(ruleset) != Ruleset:
         raise TypeError(
@@ -1418,7 +1385,7 @@ def _exceptions_bits(ruleset, pos_df, neg_df, verbosity=0):
 
 
 def _exceptions_bits_cn(cn, ruleset, pos_idx, neg_idx, verbosity=0):
-    """ Returns description length (in bits) for exceptions to a Ruleset's coverage. """
+    """Returns description length (in bits) for exceptions to a Ruleset's coverage."""
 
     # if type(ruleset) != Ruleset:
     #    raise TypeError(f'to avoid double-counting, _exceptions_bits should calculate exceptions over entire set of rules with type Ruleset')
@@ -1452,10 +1419,12 @@ def _rs_total_bits(
     ret_bestsubset=False,
     verbosity=0,
 ):
-    """ Returns total description length (in bits) of ruleset -- the sum of its theory dl and exceptions dl.
+    """Returns total description length (in bits) of ruleset -- the sum of its theory dl and exceptions dl.
 
-        bestsubset_dl (optional, <bool>): whether to return estimated minimum possible dl were all rules that increase dl to be removed
-        ret_bestsubset (optional): whether to return the best subset that was found. Return format will be (<Ruleset>,dl).
+    bestsubset_dl : bool, default=False
+        Whether to return estimated minimum possible dl were all rules that increase dl to be removed.
+    ret_bestsubset : bool, default=False
+        Whether to return the best subset that was found. Return format will be (<Ruleset>,dl).
     """
 
     # The RIPPER paper is brief and unclear w/r how to evaluate a ruleset for best potential dl.
@@ -1542,10 +1511,12 @@ def _rs_total_bits_cn(
     ret_bestsubset=False,
     verbosity=0,
 ):
-    """ Returns total description length (in bits) of ruleset -- the sum of its theory dl and exceptions dl.
+    """Returns total description length (in bits) of ruleset -- the sum of its theory dl and exceptions dl.
 
-        bestsubset_dl (optional, <bool>): whether to return estimated minimum possible dl were all rules that increase dl to be removed
-        ret_bestsubset (optional): whether to return the best subset that was found. Return format will be (<Ruleset>,dl).
+    bestsubset_dl : bool, default=False
+        Whether to return estimated minimum possible dl were all rules that increase dl to be removed.
+    ret_bestsubset : bool, default=False
+        Whether to return the best subset that was found. Return format will be (<Ruleset>,dl).
     """
 
     # The RIPPER paper is brief and unclear w/r how to evaluate a ruleset for best potential dl.
