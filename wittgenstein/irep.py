@@ -14,7 +14,7 @@ import numpy as np
 from wittgenstein import base, base_functions, preprocess
 from .base import Cond, Rule, Ruleset
 from .base_functions import score_accuracy, stop_early
-from .check import _check_param_deprecation
+from .check import _check_param_deprecation, _check_is_model_fit
 
 from .catnap import CatNap
 
@@ -236,10 +236,7 @@ class IREP:
             for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
-        if not hasattr(self, "ruleset_"):
-            raise AttributeError(
-                "You should fit an IREP object with .fit method before making predictions with it."
-            )
+        _check_is_model_fit(self)
 
         # Preprocess prediction data
         preprocess_params = {
@@ -269,6 +266,8 @@ class IREP:
             Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
             this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
+
+        _check_is_model_fit(self)
 
         predictions = self.predict(X)
         actuals = [
@@ -300,10 +299,7 @@ class IREP:
             for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
-        if not hasattr(self, "ruleset_"):
-            raise AttributeError(
-                "You should fit an IREP object with .fit method before making predictions with it."
-            )
+        _check_is_model_fit(self)
 
         # Preprocess prediction data
         preprocess_params = {

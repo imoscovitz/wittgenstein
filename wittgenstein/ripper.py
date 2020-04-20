@@ -14,6 +14,7 @@ import numpy as np
 from wittgenstein import base, base_functions, preprocess
 from .base import Cond, Rule, Ruleset, rnd
 from .base_functions import score_accuracy
+from .check import _check_is_model_fit
 
 from .catnap import CatNap
 
@@ -374,10 +375,7 @@ class RIPPER:
             for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
-        if not hasattr(self, "ruleset_"):
-            raise AttributeError(
-                "You should fit a RIPPER object with .fit method before making predictions with it."
-            )
+        _check_is_model_fit(self)
 
         X_df = base_functions.preprocess_prediction_data(
             X,
@@ -402,6 +400,8 @@ class RIPPER:
             Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
             this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
+
+        _check_is_model_fit(self)
 
         predictions = self.predict(X)
         actuals = [yi == self.pos_class for yi in base_functions.aslist(y)]
@@ -430,6 +430,9 @@ class RIPPER:
             tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
             for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
+
+        _check_is_model_fit(self)
+
         # Drop class feature if user forgot to:
         df = (
             X_df
