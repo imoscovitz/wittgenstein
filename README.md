@@ -88,7 +88,7 @@ array([[0.98787879, 0.01212121], # Pairs of positive and negative class probabil
 ```
 We can also ask our model to tell us why it made each positive prediction that it did:
 ```python
->>> ripper_clf.predict(new_data)[:5]
+>>> ripper_clf.predict(new_data[:5], give_reasons=True)
 ([True, True, False, True, True]
 [<Rule object: [physician-fee-freeze=n]>],
 [<Rule object: [physician-fee-freeze=n]>,
@@ -100,6 +100,16 @@ We can also ask our model to tell us why it made each positive prediction that i
 
 ## Issues
 If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be made more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
+
+## Changelog
+The latest stable version is pip-installable version 0.1.6.
+
+The repo contains the following (non-stable/in-progress) changes:
+- Training speed optimizations (~10x)
+- Support for training on iterable datatypes besides DataFrames, such as numpy arrays and python lists
+- Compatibility with sklearn ensembling metalearners
+- predict_proba returns probas in neg, pos order
+- Certain parameters (hyperparameters, random_state, etc.) should now be passed into IREP/RIPPER constructors rather than the fit method.
 
 ## Contributing
 Contributions are welcome! If you are interested in contributing, let me know at ilan.moscovitz@gmail.com or on [linkedin](https://www.linkedin.com/in/ilan-moscovitz/).
