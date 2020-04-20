@@ -12,15 +12,16 @@ import copy
 import numpy as np
 
 from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset
+from .base import Cond, Rule, Ruleset, AbstractRulesetClassifier
 from .base_functions import score_accuracy, stop_early
 from .check import _check_param_deprecation, _check_is_model_fit
 
 from .catnap import CatNap
 
 
-class IREP:
+class IREP(AbstractRulesetClassifier):
     """ Class for generating ruleset classification models. """
+
 
     def __init__(
         self,
@@ -30,7 +31,7 @@ class IREP:
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
-        verbosity=0,
+        verbosity=0
     ):
         """Creates a new IREP object.
 
@@ -60,22 +61,17 @@ class IREP:
                5: Show Rule grow/prune calculations
 
         """
-        self.VALID_HYPERPARAMETERS = {
-            "prune_size",
-            "n_discretize_bins",
-            "max_rules",
-            "max_rule_conds",
-            "max_total_conds",
-            "random_state",
-            "verbosity",
-        }
-        self.prune_size = prune_size
-        self.n_discretize_bins = n_discretize_bins
-        self.max_rules = max_rules
-        self.max_rule_conds = max_rule_conds
-        self.max_total_conds = max_total_conds
-        self.random_state = random_state
-        self.verbosity = verbosity
+        AbstractRulesetClassifier.__init__(
+            self,
+            prune_size=prune_size,
+            n_discretize_bins=n_discretize_bins,
+            max_rules=max_rules,
+            max_rule_conds=max_rule_conds,
+            max_total_conds=max_total_conds,
+            random_state=random_state,
+            verbosity=verbosity
+        )
+
 
     def __str__(self):
         """Returns string representation of an IREP object."""

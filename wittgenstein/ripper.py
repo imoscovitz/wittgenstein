@@ -12,14 +12,14 @@ import math
 import numpy as np
 
 from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset, rnd
+from .base import Cond, Rule, Ruleset, AbstractRulesetClassifier, rnd
 from .base_functions import score_accuracy
 from .check import _check_is_model_fit
 
 from .catnap import CatNap
 
 
-class RIPPER:
+class RIPPER(AbstractRulesetClassifier):
     """ Class for generating ruleset classification models.
         See Cohen (1995): https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
     """
@@ -27,14 +27,14 @@ class RIPPER:
     def __init__(
         self,
         k=2,
+        dl_allowance=64,
         prune_size=0.33,
         n_discretize_bins=10,
-        dl_allowance=64,
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
-        verbosity=0,
+        verbosity=0
     ):
         """ Creates a new RIPPER object.
 
@@ -69,28 +69,20 @@ class RIPPER:
                5: Show Rule grow/prune calculations
         """
 
-
-
-        self.VALID_HYPERPARAMETERS = {
-            "k",
-            "dl_allowance",
-            "prune_size",
-            "n_discretize_bins",
-            "max_rules",
-            "max_rule_conds",
-            "max_total_conds",
-            "random_state",
-            "verbosity",
-        }
+        AbstractRulesetClassifier.__init__(
+            self,
+            prune_size=prune_size,
+            n_discretize_bins=n_discretize_bins,
+            max_rules=max_rules,
+            max_rule_conds=max_rule_conds,
+            max_total_conds=max_total_conds,
+            random_state=random_state,
+            verbosity=verbosity
+        )
+        self.VALID_HYPERPARAMETERS.update({'k', 'dl_allowance'})
         self.k = k
         self.dl_allowance = dl_allowance
-        self.prune_size = prune_size
-        self.n_discretize_bins = n_discretize_bins
-        self.max_rules = max_rules
-        self.max_rule_conds = max_rule_conds
-        self.max_total_conds = max_total_conds
-        self.random_state = random_state
-        self.verbosity = verbosity
+
 
     def __str__(self):
         """Returns string representation of a RIPPER object."""

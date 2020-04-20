@@ -1,10 +1,11 @@
 """ Base classes for ruleset classifiers """
 
-import math
-import numpy as np
 import copy
+import math
+
+from abc import ABC, abstractmethod
+import numpy as np
 from numpy import var, mean
-import time
 
 import warnings
 
@@ -29,6 +30,38 @@ def _warn(message, category, filename, funcname, warnstack=[]):
             + filename
         )
     warnings.showwarning(message, category, filename=filename, lineno=funcname)
+
+
+class AbstractRulesetClassifier(ABC):
+
+    def __init__(
+        self,
+        prune_size=0.33,
+        n_discretize_bins=10,
+        max_rules=None,
+        max_rule_conds=None,
+        max_total_conds=None,
+        random_state=None,
+        verbosity=0
+    ):
+        super().__init__()
+
+        self.VALID_HYPERPARAMETERS = {
+            "prune_size",
+            "n_discretize_bins",
+            "max_rules",
+            "max_rule_conds",
+            "max_total_conds",
+            "random_state",
+            "verbosity",
+        }
+        self.prune_size = prune_size
+        self.n_discretize_bins = n_discretize_bins
+        self.max_rules = max_rules
+        self.max_rule_conds = max_rule_conds
+        self.max_total_conds = max_total_conds
+        self.random_state = random_state
+        self.verbosity = verbosity
 
 
 class Ruleset:
