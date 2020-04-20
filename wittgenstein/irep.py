@@ -11,8 +11,8 @@ import random
 import copy
 import numpy as np
 
-from wittgenstein import base, base_functions
-from .base import Cond, Rule, Ruleset, bin_df
+from wittgenstein import base, base_functions, preprocess
+from .base import Cond, Rule, Ruleset
 from .base_functions import score_accuracy, stop_early
 from .check import _check_param_deprecation
 
@@ -161,7 +161,7 @@ class IREP:
             self.class_feat,
             self.pos_class,
             self.bin_transformer_,
-        ) = base_functions.preprocess_training_data(preprocess_params)
+        ) = preprocess.preprocess_training_data(preprocess_params)
 
         # Create CatNap
         # possible minor speedup if pass cond_subset of only pos_class conds?
@@ -360,7 +360,7 @@ class IREP:
             "verbosity": self.verbosity,
         }
 
-        df = base_functions._preprocess_recalibrate_proba_data(preprocess_params)
+        df = preprocess._preprocess_recalibrate_proba_data(preprocess_params)
 
         # Recalibrate
         base_functions.recalibrate_proba(
