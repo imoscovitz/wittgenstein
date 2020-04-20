@@ -11,8 +11,8 @@ import copy
 import math
 import numpy as np
 
-from wittgenstein import base, base_functions
-from .base import Cond, Rule, Ruleset, bin_df, rnd
+from wittgenstein import base, base_functions, preprocess
+from .base import Cond, Rule, Ruleset, rnd
 from .base_functions import score_accuracy
 
 from .catnap import CatNap
@@ -27,44 +27,52 @@ class RIPPER:
         self,
         k=2,
         prune_size=0.33,
+        n_discretize_bins=10,
         dl_allowance=64,
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        random_state=None,
         verbosity=0,
     ):
         """ Creates a new RIPPER object.
 
-            args:
-                k (optional):            number of RIPPERk optimization iterations (default=2)
-                prune_size (optional):   proportion of training set to be used for pruning (default=.33)
-                dl_allowance (optional): terminate Ruleset grow phase early if a Ruleset description length is encountered
-                                            that is more than this amount above the lowest description length so far encountered.
-                                            (default=64 bits)
-                verbosity (optional):    output information about the training process (default=0)
-                                           1: Show results of each major phase
-                                           2: Show Ruleset grow/optimization steps
-                                           3: Show Ruleset grow/optimization calculations
-                                           4: Show Rule grow/prune steps
-                                           5: Show Rule grow/prune calculations
+        Parameters
+        ----------
+        k : int, default=2
+            number of RIPPERk optimization iterations
+        prune_size : float, default=.33
+            proportion of training set to be used for pruning (default=.33)
+        dl_allowance : int, default=64
+            terminate Ruleset grow phase early if a Ruleset description length is encountered
+            that is more than this amount above the lowest description length so far encountered.
+        verbosity : int, default=0:
+            output information about the training process:
+               1: Show results of each major phase
+               2: Show Ruleset grow/optimization steps
+               3: Show Ruleset grow/optimization calculations
+               4: Show Rule grow/prune steps
+               5: Show Rule grow/prune calculations
         """
-        self.POSSIBLE_HYPERPARAM_NAMES = {
-            "prune_size",
-            "dl_allowance",
+        self.VALID_HYPERPARAMETERS = {
             "k",
+            "dl_allowance",
+            "prune_size",
+            "n_discretize_bins",
             "max_rules",
             "max_rule_conds",
             "max_total_conds",
+            "random_state",
+            "verbosity",
         }
-
-        self.prune_size = prune_size
-        self.dl_allowance = dl_allowance
         self.k = k
-
+        self.dl_allowance = dl_allowance
+        self.prune_size = prune_size
+        self.n_discretize_bins = n_discretize_bins
         self.max_rules = max_rules
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
-
+        self.random_state = random_state
         self.verbosity = verbosity
 
     def __str__(self):
@@ -127,28 +135,26 @@ class RIPPER:
         # Stage 0: Setup
         ################
 
-        # Record any hyperparameters
-        self.max_rules = max_rules
-        self.max_rule_conds = max_rule_conds
-        self.max_total_conds = max_total_conds
+        # Deal with hyperparam deprecation
+        # _check_param_deprecation(kwargs, self.VALID_HYPERPARAMETERS)
+        # self.set_params(**kwargs)
 
         # Preprocess training data
+        preprocess_params = {
+            "trainset": trainset,
+            "y": y,
+            "class_feat": class_feat,
+            "pos_class": pos_class,
+            "feature_names": feature_names,
+            "n_discretize_bins": self.n_discretize_bins,
+            "verbosity": self.verbosity,
+        }
         (
             df,
             self.class_feat,
             self.pos_class,
-            self.trainset_features_,
             self.bin_transformer_,
-        ) = base_functions.preprocess_training_data(
-            trainset,
-            y=y,
-            class_feat=class_feat,
-            pos_class=pos_class,
-            user_requested_feature_names=feature_names,
-            bin_transformer_=None,
-            n_discretize_bins=n_discretize_bins,
-            verbosity=self.verbosity,
-        )
+        ) = preprocess.preprocess_training_data(preprocess_params)
 
         # CatNap optimization:
         if cn_optimize:
@@ -386,7 +392,13 @@ class RIPPER:
         )
 
     def recalibrate_proba(
-        self, Xy, min_samples=20, require_min_samples=True, discretize=True
+        self,
+        X_or_Xy,
+        y=None,
+        feature_names=None,
+        min_samples=20,
+        require_min_samples=True,
+        discretize=True,
     ):
         """ Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
             Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
@@ -396,24 +408,39 @@ class RIPPER:
 
             Xy: labeled data
 
-            min_samples <int> (optional): required minimum number of samples per Rule
-                                          default=10. set None to ignore min sampling requirement so long as at least one sample exists.
-            require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
-                                                   False: warn, but still replace Rules that have enough samples
-            discretize <bool> (optional): if the classifier has already fit a discretization, automatically discretize recalibrate_proba's training data
-                                          default=True
+            min_samples : int, default=20
+                required minimum number of samples per Rule
+                Use None to ignore minimum sampling requirement so long as at least one sample exists.
+            require_min_samples : bool, default=True
+                True: halt (with warning) in case min_samples not achieved for all Rules
+                False: warn, but still replace Rules that have enough samples
+            discretize : bool, default=True
+                If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
         """
+
+        # Preprocess training data
+        preprocess_params = {
+            "X_or_Xy": X_or_Xy,
+            "y": y,
+            "class_feat": self.class_feat,
+            "pos_class": self.pos_class,
+            "bin_transformer_": self.bin_transformer_ if discretize else None,
+            "user_requested_feature_names": feature_names,
+            "min_samples": min_samples,
+            "require_min_samples": require_min_samples,
+            "verbosity": self.verbosity,
+        }
+
+        df = preprocess._preprocess_recalibrate_proba_data(preprocess_params)
 
         # Recalibrate
         base_functions.recalibrate_proba(
             self.ruleset_,
-            Xy_df=Xy,
+            Xy_df=df,
             class_feat=self.class_feat,
             pos_class=self.pos_class,
             min_samples=min_samples,
             require_min_samples=require_min_samples,
-            discretize=discretize,
-            bin_transformer=self.bin_transformer_,
         )
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
@@ -1180,13 +1207,11 @@ class RIPPER:
                 print("All positives covered\n")
 
     def get_params(self, deep=True):
-        return {
-            param: self.__dict__.get(param) for param in self.POSSIBLE_HYPERPARAM_NAMES
-        }
+        return {param: self.__dict__.get(param) for param in self.VALID_HYPERPARAMETERS}
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
-            # if parameter in self.POSSIBLE_HYPERPARAM_NAMES:
+            # if parameter in self.VALID_HYPERPARAMETERS:
             setattr(self, parameter, value)
         return self
 
