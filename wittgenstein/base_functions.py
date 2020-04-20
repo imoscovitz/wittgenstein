@@ -628,14 +628,6 @@ def rm_rule_covers_cn(cn, rule, pos_idx, neg_idx):
     )
 
 
-
-
-
-def _get_missing_selected_features(df, model_selected_features):
-    df_feats = df.columns.tolist()
-    return [f for f in model_selected_features if f not in df_feats]
-
-
 def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
     """ Process params into trainset, class feature name, and pos class, for use in .fit methods.
         No longer used.
@@ -735,8 +727,6 @@ def infer_columns(df, expected_columns):
     #####################
     ##### CHECKERS ######
     #####################
-
-
 
 
 def stop_early(ruleset, max_rules, max_total_conds):

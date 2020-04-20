@@ -25,6 +25,12 @@ def _check_is_model_fit(model):
             "You should fit the ruleset classifier with .fit method before making predictions with it."
         )
 
+
+def _get_missing_selected_features(df, model_selected_features):
+    df_feats = df.columns.tolist()
+    return [f for f in model_selected_features if f not in df_feats]
+
+
 # TODO: Check in fit methods before fitting
 def _check_any_pos(df, class_feat, pos_class):
     pass

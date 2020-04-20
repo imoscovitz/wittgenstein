@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from wittgenstein.check import _check_any_datasets_not_empty
+from wittgenstein.check import _check_any_datasets_not_empty, _get_missing_selected_features
 
 
 def preprocess_training_data(preprocess_params):
@@ -85,6 +85,7 @@ def preprocess_prediction_data(preprocess_params):
     )
 
     return df
+
 
 def _preprocess_recalibrate_proba_data(preprocess_params):
 
@@ -190,6 +191,7 @@ def _check_valid_input_data(X_or_Xy, y=None, class_feat=None, requires_label=Tru
         raise NameError(
             f"Feature name mismatch between params y {y.name} and class_feat {class_feat}. Besides, you only need to provide one of them."
         )
+
 
 def _convert_to_df(X_or_Xy, y, class_feat, requires_label=True):
     """ Create a labeled trainset from input data. If original data was of pandas type, make deepcopy. """
@@ -311,7 +313,6 @@ def _get_or_set_feature_names(
             return df
         else:
             raise NameError(missing_feats_str)
-
 
 
 def _try_bin_fit_or_fittransform_(
@@ -499,7 +500,6 @@ def bin_transform(df, fit_dict, names_precision=2):
             )
             df[feat] = feat_transformation
     return df
-
 
 
 def _try_rename_features(df, class_feat, feature_names):

@@ -313,7 +313,7 @@ class IREP:
             "verbosity": self.verbosity,
         }
 
-        X_df = base_functions.preprocess_prediction_data(preprocess_params)
+        X_df = preprocess.preprocess_prediction_data(preprocess_params)
 
         return self.ruleset_.predict_proba(X_df, give_reasons=give_reasons)
 
