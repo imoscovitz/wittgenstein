@@ -36,6 +36,7 @@ class AbstractRulesetClassifier(ABC):
 
     def __init__(
         self,
+        algorithm_name,
         prune_size=0.33,
         n_discretize_bins=10,
         max_rules=None,
@@ -55,6 +56,7 @@ class AbstractRulesetClassifier(ABC):
             "random_state",
             "verbosity",
         }
+        self.algorithm_name = algorithm_name
         self.prune_size = prune_size
         self.n_discretize_bins = n_discretize_bins
         self.max_rules = max_rules
@@ -63,6 +65,16 @@ class AbstractRulesetClassifier(ABC):
         self.random_state = random_state
         self.verbosity = verbosity
 
+    def __str__(self):
+        """Returns string representation."""
+        params = str(self.get_params()) + ">"
+        params = (
+            params.replace(": ", "=")
+            .replace("'", "")
+            .replace("{", "(")
+            .replace("}", ")")
+        )
+        return f"<{self.algorithm_name}{params}"
 
 class Ruleset:
     """ Base Ruleset model.

@@ -63,6 +63,7 @@ class IREP(AbstractRulesetClassifier):
         """
         AbstractRulesetClassifier.__init__(
             self,
+            algorithm_name='IREP',
             prune_size=prune_size,
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
@@ -74,15 +75,8 @@ class IREP(AbstractRulesetClassifier):
 
 
     def __str__(self):
-        """Returns string representation of an IREP object."""
-        params = str(self.get_params()) + ">"
-        params = (
-            params.replace(": ", "=")
-            .replace("'", "")
-            .replace("{", "(")
-            .replace("}", ")")
-        )
-        return f"<IREP{params}"
+        """Returns string representation."""
+        return super().__str__()
 
     __repr__ = __str__
 

@@ -71,6 +71,7 @@ class RIPPER(AbstractRulesetClassifier):
 
         AbstractRulesetClassifier.__init__(
             self,
+            algorithm_name='RIPPER',
             prune_size=prune_size,
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
