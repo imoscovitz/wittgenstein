@@ -78,14 +78,9 @@ class IREP(AbstractRulesetClassifier):
         """Returns string representation."""
         return super().__str__()
 
-    __repr__ = __str__
-
     def out_model(self):
         """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
-        if hasattr(self, "ruleset_"):
-            self.ruleset_.out_pretty()
-        else:
-            print("no model fitted")
+        super().out_model()
 
     def fit(
         self,

@@ -76,6 +76,15 @@ class AbstractRulesetClassifier(ABC):
         )
         return f"<{self.algorithm_name}{params}"
 
+    __repr__ = __str__
+
+    def out_model(self):
+        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
+        if hasattr(self, "ruleset_"):
+            self.ruleset_.out_pretty()
+        else:
+            print("no model fitted")
+
 class Ruleset:
     """ Base Ruleset model.
         Implements collection of Rules in disjunctive normal form.
