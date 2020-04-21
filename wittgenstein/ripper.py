@@ -328,7 +328,7 @@ class RIPPER(AbstractRulesetClassifier):
         # Set Ruleset features
         self.selected_features_ = self.ruleset_.get_selected_features()
         self.trainset_features_ = df.drop(self.class_feat, axis=1).columns.tolist()
-        
+
         # Fit probas
         self.recalibrate_proba(
             df, min_samples=None, require_min_samples=False, discretize=False
@@ -358,98 +358,6 @@ class RIPPER(AbstractRulesetClassifier):
         actuals = [yi == self.pos_class for yi in base_functions.aslist(y)]
         return score_function(actuals, predictions)
 
-    def predict_proba(self, X_df, give_reasons=False, ret_n=False, min_samples=1):
-        """Predict class probabilities of data using a fit model.
-
-        Parameters
-        ----------
-            X: DataFrame, numpy array, or other iterable
-                examples to make predictions on. All selected features of the model should be present.
-
-            give_reasons : bool, default=False
-                whether to provide reasons for each prediction made.
-            feature_names : list<str>, default=None
-                specify feature names for X to orient X's features with selected features.
-
-        Returns
-        -------
-        array
-            predicted class label probabilities for each row of X, ordered neg, pos. True indicates positive predicted class; False non-positive class.
-
-        or, if give_reasons=True:
-        tuple< array, <list<list<Rule>> >
-            tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
-            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
-        """
-
-        _check_is_model_fit(self)
-
-        # Drop class feature if user forgot to:
-        df = (
-            X_df
-            if self.class_feat not in X_df.columns
-            else X_df.drop(self.class_feat, axis=1)
-        )
-        return self.ruleset_.predict_proba(
-            df,
-            give_reasons=give_reasons,
-            ret_n=ret_n,
-            min_samples=min_samples,
-            discretize=True,
-            bin_transformer=self.bin_transformer_,
-        )
-
-    def recalibrate_proba(
-        self,
-        X_or_Xy,
-        y=None,
-        feature_names=None,
-        min_samples=20,
-        require_min_samples=True,
-        discretize=True,
-    ):
-        """Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
-        Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
-
-        Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
-        Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
-
-        Xy: labeled data
-
-        min_samples : int, default=20
-            Required minimum number of samples per Rule.
-            Use None to ignore minimum sampling requirement so long as at least one sample exists.
-        require_min_samples : bool, default=True
-            True: halt (with warning) in case min_samples not achieved for all Rules
-            False: warn, but still replace Rules that have enough samples
-        discretize : bool, default=True
-            If the classifier has already fit bins, automatically discretize recalibrate_proba's training data
-        """
-
-        # Preprocess training data
-        preprocess_params = {
-            "X_or_Xy": X_or_Xy,
-            "y": y,
-            "class_feat": self.class_feat,
-            "pos_class": self.pos_class,
-            "bin_transformer_": self.bin_transformer_ if discretize else None,
-            "user_requested_feature_names": feature_names,
-            "min_samples": min_samples,
-            "require_min_samples": require_min_samples,
-            "verbosity": self.verbosity,
-        }
-
-        df = preprocess._preprocess_recalibrate_proba_data(preprocess_params)
-
-        # Recalibrate
-        base_functions.recalibrate_proba(
-            self.ruleset_,
-            Xy_df=df,
-            class_feat=self.class_feat,
-            pos_class=self.pos_class,
-            min_samples=min_samples,
-            require_min_samples=require_min_samples,
-        )
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
         """Precalculate rule theory dls for various-sized rules."""
