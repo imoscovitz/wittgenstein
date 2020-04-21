@@ -12,7 +12,8 @@ import math
 import numpy as np
 
 from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset, AbstractRulesetClassifier, rnd
+from .base import Cond, Rule, Ruleset, rnd
+from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .base_functions import score_accuracy
 from .check import _check_is_model_fit
 
@@ -167,7 +168,8 @@ class RIPPER(AbstractRulesetClassifier):
             self.bin_transformer_,
         ) = preprocess.preprocess_training_data(preprocess_params)
 
-        # CatNap optimization:
+        # Create CatNap
+        # possible minor speedup if pass cond_subset of only pos_class conds?
         if cn_optimize:
             self.cn = CatNap(
                 df,
@@ -178,16 +180,11 @@ class RIPPER(AbstractRulesetClassifier):
             )
 
         # Split df into pos, neg classes
-        if cn_optimize:
-            pos_idx, neg_idx = self.cn.pos_idx_neg_idx(
-                df, self.class_feat, self.pos_class
-            )
-        else:
-            pos_df, neg_df = base_functions.pos_neg_split(
-                df, self.class_feat, self.pos_class
-            )
-            pos_df = pos_df.drop(self.class_feat, axis=1)
-            neg_df = neg_df.drop(self.class_feat, axis=1)
+        pos_df, neg_df = base_functions.pos_neg_split(
+            df, self.class_feat, self.pos_class
+        )
+        pos_df = pos_df.drop(self.class_feat, axis=1)
+        neg_df = neg_df.drop(self.class_feat, axis=1)
 
         # Collect possible conds
         self._set_possible_conds(df)
@@ -198,15 +195,17 @@ class RIPPER(AbstractRulesetClassifier):
 
         self.ruleset_ = Ruleset()
         if cn_optimize:
+            pos_idx = set(pos_df.index.tolist())
+            neg_idx = set(neg_df.index.tolist())
             self.ruleset_ = self._grow_ruleset_cn(
                 pos_idx,
                 neg_idx,
                 prune_size=self.prune_size,
                 dl_allowance=self.dl_allowance,
-                max_rules=max_rules,
-                max_rule_conds=max_rule_conds,
-                max_total_conds=max_total_conds,
-                random_state=random_state,
+                max_rules=self.max_rules,
+                max_rule_conds=self.max_rule_conds,
+                max_total_conds=self.max_total_conds,
+                random_state=self.random_state,
             )
         else:
             self.ruleset_ = self._grow_ruleset(
@@ -214,10 +213,10 @@ class RIPPER(AbstractRulesetClassifier):
                 neg_df,
                 prune_size=self.prune_size,
                 dl_allowance=self.dl_allowance,
-                max_rules=max_rules,
-                max_rule_conds=max_rule_conds,
-                max_total_conds=max_total_conds,
-                random_state=random_state,
+                max_rules=self.max_rules,
+                max_rule_conds=self.max_rule_conds,
+                max_total_conds=self.max_total_conds,
+                random_state=self.random_state,
             )
         if self.verbosity >= 1:
             print()
@@ -231,7 +230,7 @@ class RIPPER(AbstractRulesetClassifier):
 
         for iter in range(1, self.k + 1):
             # Create new but reproducible random_state (if applicable)
-            iter_random_state = random_state + 100 if random_state is not None else None
+            iter_random_state = self.random_state + 100 if self.random_state is not None else None
             # Run optimization iteration
             if self.verbosity >= 1:
                 print(f"optimization run {iter} of {self.k}")
@@ -276,18 +275,18 @@ class RIPPER(AbstractRulesetClassifier):
         if cn_optimize:
             self._cover_remaining_positives_cn(
                 df,
-                max_rules=max_rules,
-                max_rule_conds=max_rule_conds,
-                max_total_conds=max_total_conds,
-                random_state=random_state,
+                max_rules=self.max_rules,
+                max_rule_conds=self.max_rule_conds,
+                max_total_conds=self.max_total_conds,
+                random_state=self.random_state,
             )
         else:
             self._cover_remaining_positives(
                 df,
-                max_rules=max_rules,
-                max_rule_conds=max_rule_conds,
-                max_total_conds=max_total_conds,
-                random_state=random_state,
+                max_rules=self.max_rules,
+                max_rule_conds=self.max_rule_conds,
+                max_total_conds=self.max_total_conds,
+                random_state=self.random_state,
             )
 
         #################################################
@@ -328,7 +327,8 @@ class RIPPER(AbstractRulesetClassifier):
 
         # Set Ruleset features
         self.selected_features_ = self.ruleset_.get_selected_features()
-
+        self.trainset_features_ = df.drop(self.class_feat, axis=1).columns.tolist()
+        
         # Fit probas
         self.recalibrate_proba(
             df, min_samples=None, require_min_samples=False, discretize=False
@@ -338,43 +338,6 @@ class RIPPER(AbstractRulesetClassifier):
         if cn_optimize:
             del self.cn
 
-    def predict(self, X, give_reasons=False, feature_names=None):
-        """Predict classes using a fit model.
-
-        Parameters
-        ----------
-            X: DataFrame, numpy array, or other iterable
-                examples to make predictions on. All selected features of the model should be present.
-
-            give_reasons : bool, default=False
-                Whether to provide reasons for each prediction made.
-            feature_names : list<str>, default=None
-                Specify feature names for X to orient X's features with selected features.
-
-        Returns
-        -------
-        list<bool>
-            Predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
-
-        Or, if give_reasons=True, returns
-
-        tuple<list<bool>, <list<list<Rule>>>
-            Tuple containing list of predictions and a list of the corresponding reasons for each prediction --
-            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
-        """
-
-        _check_is_model_fit(self)
-
-        X_df = base_functions.preprocess_prediction_data(
-            X,
-            trainset_features=self.trainset_features_,
-            model_selected_features=self.selected_features_,
-            bin_transformer_=self.bin_transformer_,
-            user_requested_feature_names=feature_names,
-            verbosity=0,
-        )
-
-        return self.ruleset_.predict(X_df, give_reasons=give_reasons)
 
     def score(self, X, y, score_function=score_accuracy):
         """Score the performance of a fit model.

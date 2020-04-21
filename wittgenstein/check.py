@@ -1,5 +1,4 @@
-from .base import _warn  # (message, category, filename, funcname, warnstack=[]):
-
+import warnings
 # def _get_non_default_params(param_values_defaults):
 
 #    non_default_params = []
@@ -14,6 +13,26 @@ from .base import _warn  # (message, category, filename, funcname, warnstack=[])
 #        _warn(f'.fit: In the future, define parameters: {non_default_params} when initializating IREP or RIPPER object instead of during model fitting.',
 #                DeprecationWarning,'irep/ripper','fit')
 
+def _warn(message, category, filename, funcname, warnstack=[]):
+    """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
+    message = "\n" + message + "\n"
+    filename += ".py"
+    funcname = " ." + funcname
+    if warnstack:
+        filename = (
+            str(
+                [
+                    stack_filename + ".py: ." + stack_funcname + " | "
+                    for stack_filename, stack_funcname in warnstack
+                ]
+            )
+            .strip("[")
+            .strip("]")
+            .strip(" ")
+            .strip("'")
+            + filename
+        )
+    warnings.showwarning(message, category, filename=filename, lineno=funcname)
 
 def _check_any_datasets_not_empty(datasets):
     return any([len(dataset) > 0 for dataset in datasets])

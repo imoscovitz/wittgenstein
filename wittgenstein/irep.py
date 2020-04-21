@@ -12,9 +12,10 @@ import copy
 import numpy as np
 
 from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset, AbstractRulesetClassifier
+from .base import Cond, Rule, Ruleset
+from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .base_functions import score_accuracy, stop_early
-from .check import _check_param_deprecation, _check_is_model_fit
+from .check import _check_param_deprecation
 
 from .catnap import CatNap
 
@@ -196,69 +197,6 @@ class IREP(AbstractRulesetClassifier):
         if cn_optimize:
             del self.cn
 
-    def predict(self, X, give_reasons=False, feature_names=None):
-        """Predict classes using a fit model.
-
-        Parameters
-        ----------
-            X: DataFrame, numpy array, or other iterable
-                examples to make predictions on. All selected features of the model should be present.
-
-            give_reasons : bool, default=False
-                Whether to provide reasons for each prediction made.
-            feature_names : list<str>, default=None
-                Specify feature names for X to orient X's features with selected features.
-
-        Returns
-        -------
-        list<bool>
-            Predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
-
-        Or, if give_reasons=True, returns
-
-        tuple<list<bool>, <list<list<Rule>>>
-            Tuple containing list of predictions and a list of the corresponding reasons for each prediction --
-            for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
-        """
-
-        _check_is_model_fit(self)
-
-        # Preprocess prediction data
-        preprocess_params = {
-            "X": X,
-            "class_feat": self.class_feat,
-            "pos_class": self.pos_class,
-            "bin_transformer_": self.bin_transformer_,
-            "user_requested_feature_names": feature_names,
-            "selected_features_": self.selected_features_,
-            "trainset_features_": self.trainset_features_,
-            "verbosity": self.verbosity,
-        }
-
-        X_df = base_functions.preprocess_prediction_data(preprocess_params)
-
-        return self.ruleset_.predict(X_df, give_reasons=give_reasons)
-
-    def score(self, X, y, score_function=score_accuracy):
-        """Score the performance of a fit model.
-
-        X : DataFrame, numpy array, or other iterable
-            Examples to score.
-        y : Series, numpy array, or other iterable
-            Class label actuals.
-
-        score_function : function, default=score_accuracy
-            Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
-            this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
-        """
-
-        _check_is_model_fit(self)
-
-        predictions = self.predict(X)
-        actuals = [
-            yi == self.pos_class for yi in base_functions._preprocess_y_score_data(y)
-        ]
-        return score_function(actuals, predictions)
 
     def predict_proba(self, X, give_reasons=False, feature_names=None):
         """Predict class probabilities of data using a fit model.

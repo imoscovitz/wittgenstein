@@ -3,8 +3,9 @@
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
-from wittgenstein.base import Cond, Rule, Ruleset, rnd, _warn
+from wittgenstein.base import Cond, Rule, Ruleset, rnd
 from wittgenstein.catnap import CatNap
+from wittgenstein.check import _warn
 
 import math
 from functools import reduce

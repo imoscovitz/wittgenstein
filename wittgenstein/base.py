@@ -2,88 +2,11 @@
 
 import copy
 import math
+import warnings
 
-from abc import ABC, abstractmethod
 import numpy as np
 from numpy import var, mean
 
-import warnings
-
-
-def _warn(message, category, filename, funcname, warnstack=[]):
-    """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
-    message = "\n" + message + "\n"
-    filename += ".py"
-    funcname = " ." + funcname
-    if warnstack:
-        filename = (
-            str(
-                [
-                    stack_filename + ".py: ." + stack_funcname + " | "
-                    for stack_filename, stack_funcname in warnstack
-                ]
-            )
-            .strip("[")
-            .strip("]")
-            .strip(" ")
-            .strip("'")
-            + filename
-        )
-    warnings.showwarning(message, category, filename=filename, lineno=funcname)
-
-
-class AbstractRulesetClassifier(ABC):
-
-    def __init__(
-        self,
-        algorithm_name,
-        prune_size=0.33,
-        n_discretize_bins=10,
-        max_rules=None,
-        max_rule_conds=None,
-        max_total_conds=None,
-        random_state=None,
-        verbosity=0
-    ):
-        super().__init__()
-
-        self.VALID_HYPERPARAMETERS = {
-            "prune_size",
-            "n_discretize_bins",
-            "max_rules",
-            "max_rule_conds",
-            "max_total_conds",
-            "random_state",
-            "verbosity",
-        }
-        self.algorithm_name = algorithm_name
-        self.prune_size = prune_size
-        self.n_discretize_bins = n_discretize_bins
-        self.max_rules = max_rules
-        self.max_rule_conds = max_rule_conds
-        self.max_total_conds = max_total_conds
-        self.random_state = random_state
-        self.verbosity = verbosity
-
-    def __str__(self):
-        """Returns string representation."""
-        params = str(self.get_params()) + ">"
-        params = (
-            params.replace(": ", "=")
-            .replace("'", "")
-            .replace("{", "(")
-            .replace("}", ")")
-        )
-        return f"<{self.algorithm_name}{params}"
-
-    __repr__ = __str__
-
-    def out_model(self):
-        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
-        if hasattr(self, "ruleset_"):
-            self.ruleset_.out_pretty()
-        else:
-            print("no model fitted")
 
 class Ruleset:
     """ Base Ruleset model.
