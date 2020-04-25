@@ -23,7 +23,6 @@ from .catnap import CatNap
 class IREP(AbstractRulesetClassifier):
     """ Class for generating ruleset classification models. """
 
-
     def __init__(
         self,
         prune_size=0.33,
@@ -32,7 +31,7 @@ class IREP(AbstractRulesetClassifier):
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
-        verbosity=0
+        verbosity=0,
     ):
         """Creates a new IREP object.
 
@@ -64,16 +63,15 @@ class IREP(AbstractRulesetClassifier):
         """
         AbstractRulesetClassifier.__init__(
             self,
-            algorithm_name='IREP',
+            algorithm_name="IREP",
             prune_size=prune_size,
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
             random_state=random_state,
-            verbosity=verbosity
+            verbosity=verbosity,
         )
-
 
     def __str__(self):
         """Returns string representation."""
@@ -196,7 +194,6 @@ class IREP(AbstractRulesetClassifier):
         # Cleanup
         if cn_optimize:
             del self.cn
-
 
     def _grow_ruleset(self, pos_df, neg_df):
         """Grow a Ruleset with (optional) pruning."""

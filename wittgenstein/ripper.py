@@ -35,7 +35,7 @@ class RIPPER(AbstractRulesetClassifier):
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
-        verbosity=0
+        verbosity=0,
     ):
         """ Creates a new RIPPER object.
 
@@ -72,19 +72,18 @@ class RIPPER(AbstractRulesetClassifier):
 
         AbstractRulesetClassifier.__init__(
             self,
-            algorithm_name='RIPPER',
+            algorithm_name="RIPPER",
             prune_size=prune_size,
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
             random_state=random_state,
-            verbosity=verbosity
+            verbosity=verbosity,
         )
-        self.VALID_HYPERPARAMETERS.update({'k', 'dl_allowance'})
+        self.VALID_HYPERPARAMETERS.update({"k", "dl_allowance"})
         self.k = k
         self.dl_allowance = dl_allowance
-
 
     def __str__(self):
         """Returns string representation of a RIPPER object."""
@@ -230,7 +229,9 @@ class RIPPER(AbstractRulesetClassifier):
 
         for iter in range(1, self.k + 1):
             # Create new but reproducible random_state (if applicable)
-            iter_random_state = self.random_state + 100 if self.random_state is not None else None
+            iter_random_state = (
+                self.random_state + 100 if self.random_state is not None else None
+            )
             # Run optimization iteration
             if self.verbosity >= 1:
                 print(f"optimization run {iter} of {self.k}")
@@ -338,7 +339,6 @@ class RIPPER(AbstractRulesetClassifier):
         if cn_optimize:
             del self.cn
 
-
     def score(self, X, y, score_function=score_accuracy):
         """Score the performance of a fit model.
 
@@ -357,7 +357,6 @@ class RIPPER(AbstractRulesetClassifier):
         predictions = self.predict(X)
         actuals = [yi == self.pos_class for yi in base_functions.aslist(y)]
         return score_function(actuals, predictions)
-
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):
         """Precalculate rule theory dls for various-sized rules."""

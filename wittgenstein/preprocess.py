@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from wittgenstein.check import _check_any_datasets_not_empty, _get_missing_selected_features
+from wittgenstein.check import _check_any_datasets_not_empty
+from wittgenstein.base_functions import truncstr
 
 
 def preprocess_training_data(preprocess_params):
@@ -16,21 +17,31 @@ def preprocess_training_data(preprocess_params):
     verbosity = preprocess_params["verbosity"]
 
     # STEP 0: ERROR CHECKING
-    _check_valid_input_data(trainset, y, class_feat)
+    _check_valid_input_data(
+        trainset,
+        y,
+        class_feat,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # STEP 1: DETERMINE class_feat
     class_feat = _get_class_feat_name(class_feat, y)
 
-    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). DO NOT MODIFY ORIGINAL DATA
-    df = _convert_to_df(trainset, y, class_feat)
+    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
+    df = _convert_to_df(
+        trainset,
+        y,
+        class_feat,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # STEP 3: DEFINE pos_class
     pos_class = get_pos_class(df, class_feat, pos_class)
 
     # STEP 4: GET_OR_SET FEATURE NAMES
-    df = _get_or_set_feature_names(
-        df, class_feat, user_requested_feature_names=user_requested_feature_names
-    )
+    # df = _get_or_set_feature_names(
+    #    df, class_feat, user_requested_feature_names=user_requested_feature_names
+    # )
 
     # STEP 5: INFER FEATURE DTYPES
     df = df.infer_objects()
@@ -59,7 +70,13 @@ def preprocess_prediction_data(preprocess_params):
     verbosity = preprocess_params["verbosity"]
 
     # STEP 0: ERROR CHECKING
-    _check_valid_input_data(X, y=None, class_feat=class_feat, requires_label=False)
+    _check_valid_input_data(
+        X,
+        y=None,
+        class_feat=class_feat,
+        requires_label=False,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # STEP 1: BUILD DataFrame from X_or_Xy (and if necessary y). DO NOT MODIFY ORIGINAL DATA
     df = _convert_to_df(X, y=None, class_feat=class_feat, requires_label=False)
@@ -99,15 +116,20 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
     verbosity = preprocess_params["verbosity"]
 
     # STEP 0: ERROR CHECKING
-    _check_valid_input_data(X_or_Xy, y, class_feat)
+    _check_valid_input_data(
+        X_or_Xy,
+        y,
+        class_feat,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). DO NOT MODIFY ORIGINAL DATA
     df = _convert_to_df(X_or_Xy, y, class_feat)
 
     # STEP 4: GET_OR_SET FEATURE NAMES
-    df = _get_or_set_feature_names(
-        df, class_feat, user_requested_feature_names=user_requested_feature_names
-    )
+    # df = _get_or_set_feature_names(
+    #    df, class_feat, user_requested_feature_names=user_requested_feature_names
+    # )
 
     # STEP 5: INFER FEATURE DTYPES
     df = df.infer_objects()
@@ -152,7 +174,13 @@ def _preprocess_y_score_data(y):
         )
 
 
-def _check_valid_input_data(X_or_Xy, y=None, class_feat=None, requires_label=True):
+def _check_valid_input_data(
+    X_or_Xy,
+    y=None,
+    class_feat=None,
+    user_requested_feature_names=None,
+    requires_label=True,
+):
 
     # Make sure there is data
     if not _check_any_datasets_not_empty([X_or_Xy]):
@@ -168,20 +196,19 @@ def _check_valid_input_data(X_or_Xy, y=None, class_feat=None, requires_label=Tru
 
     # Ensure target data exists if class feat is provided
     if y is None:
-        # X_or_Xy is a df: does target column exist?
-        if hasattr(X_or_Xy, "columns") and (class_feat not in X_or_Xy.columns):
-            raise IndexError(f"Data does not contain class feature {class_feat}")
-        # X_or_Xy is an array or iterable: does target index exist?
-        elif not hasattr(X_or_Xy, "columns"):
-            try:
-                if int(class_feat) >= len(X_or_Xy[0]):
-                    raise IndexError(
-                        f"Class index {class_feat} out of range for trainset."
-                    )
-            except:
-                raise IndexError(f"Class index {class_feat} out of range for trainset.")
+        if user_requested_feature_names is not None:
+            feature_names = user_requested_feature_names
+        elif hasattr(X_or_Xy, "columns"):
+            feature_names = X_or_Xy.columns
+        else:
+            feature_names = list(range(len(X_or_Xy[0])))
 
-    # Ensure no class feature name mismatch
+        if class_feat not in feature_names:
+            raise IndexError(
+                f"Dataset does not include class feature name {class_feat}. Training set features: {feature_names}"
+            )
+
+    # If both y and class_feat provided, ensure no name mismatch between them.
     if (
         y is not None
         and class_feat is not None
@@ -193,7 +220,9 @@ def _check_valid_input_data(X_or_Xy, y=None, class_feat=None, requires_label=Tru
         )
 
 
-def _convert_to_df(X_or_Xy, y, class_feat, requires_label=True):
+def _convert_to_df(
+    X_or_Xy, y, class_feat, user_requested_feature_names=None, requires_label=True
+):
     """ Create a labeled trainset from input data. If original data was of pandas type, make deepcopy. """
 
     # Create df from X_or_Xy
@@ -201,6 +230,12 @@ def _convert_to_df(X_or_Xy, y, class_feat, requires_label=True):
         df = X_or_Xy.copy()
     else:
         df = pd.DataFrame(X_or_Xy)
+
+    # Set feature names
+    if user_requested_feature_names is not None:
+        df.columns = list(
+            user_requested_feature_names
+        )  # list in case the type is df.columns or something
 
     # If necessary, merge y into df
     if y is not None:
@@ -211,6 +246,7 @@ def _convert_to_df(X_or_Xy, y, class_feat, requires_label=True):
         # If that doesn't work, it's likely a python iterable
         except:
             df[class_feat] = y
+
     return df
 
 
@@ -233,7 +269,7 @@ def get_pos_class(df, class_feat, pos_class):
 
     # Can't infer classes
     raise NameError(
-        f"Couldn't infer name of positive target class from class feature: {class_feat}. Try using parameter pos_class to specify which class label should be treated as positive, or renaming your classes as booleans or 0,1."
+        f"Couldn't infer name of positive target class from class feature: {class_feat}. Try using parameter pos_class to specify which class label should be treated as positive, or renaming your classes as booleans or 0, 1."
     )
 
 
@@ -252,6 +288,7 @@ def _get_class_feat_name(class_feat, y):
     return class_feat
 
 
+"""
 def _get_or_set_feature_names(
     df,
     class_feat,
@@ -259,60 +296,38 @@ def _get_or_set_feature_names(
     selected_features_=None,
     trainset_features_=None,
 ):
-    """ Assign feature names in order of these preferences:
+    "" Assign feature names in order of these preferences:
         1) user_requested_feature_names
         2) fine if no missing features or no model has been trained
         3) trainset_features_ (if they exist)
-    """
+    ""
 
     # 1) User wants to rename features. Raise error if fail
-    if (
-        user_requested_feature_names is not None
-        and len(user_requested_feature_names) > 0
-    ):
-        original_feat_names = [col for col in df.columns if col != class_feat]
-        df = _try_rename_features(
-            df, class_feat, user_requested_feature_names
-        )  # Returns None if can't rename
-        if df is not None:
-            return df
-        else:
+    if user_requested_feature_names is not None:
+
+        # Are they the same length?
+        if len(df.columns) != len(user_requested_feature_names):
+            original_feat_names = [col for col in df.columns if col != class_feat]
             raise IndexError(
                 f"The number of requested features names ({len(user_requested_feature_names)}) does not match the number of non-class features in dataset: ({len(original_feat_names)}).\nParam feature_names: {truncstr(user_requested_feature_names,10)}\nTraining set features names: {truncstr(original_feat_names,10)}"
             )
+        else:
+            df.columns = user_requested_feature_names
 
-    # 2) If no model trained, use defaults
+    # 2) If no model trained, use input data feature names
     if selected_features_ is None:
         return df
 
-    # 3) Are all model features present? If so, we're good.
-    missing_feats = _get_missing_selected_features(df, selected_features_)
+    # 3) If the model is trained, do we have all the features the model needs?
+    missing_feats = [feat for feat in selected_features_ if feat not in df.columns]
     if not missing_feats:
         return df
 
-    # 4) Some feats are missing: try to apply training data. Warn on success; raise error on fail
+    # 4) Some features the model needs are missing. Do we have all the features we need?
     if missing_feats:
-        missing_feats_str = f"Some features selected by fit Ruleset model are missing: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use param feature_names to specify the names of dataset features.\nAttempted feature names:{truncstr(df.columns.tolist())}\n"
-        df = _try_rename_features(
-            df, class_feat, trainset_features_
-        )  # returns None if feature length mismatch
-        if df is not None:
-            _warn(
-                missing_feats_str,
-                RuntimeWarning,
-                filename="base_functions",
-                funcname="_get_or_set_feature_names",
-            )
-            trainset_feats_str = f"Mismatch between Ruleset training feature names and prediction feature names:{truncstr(df.columns.tolist())}\nPredicting under on the assumption that the features provided for prediction are the same as those the model was trained on, and that they are being provided in the same order.\nYou probably want to ensure your prediction dataset includes the same feature names as your Ruleset selected features, or alternately, to use param feature_names to specify prediction feature names."
-            _warn(
-                trainset_feats_str,
-                RuntimeWarning,
-                filename="base_functions",
-                funcname="_get_or_set_feature_names",
-            )
-            return df
-        else:
-            raise NameError(missing_feats_str)
+        missing_feats_str = f"Some features selected by fit Ruleset model are missing: {missing_feats} from {df.columns}.\nEnsure prediction dataset includes all Ruleset-selected features. (Hint: If your dataset includes all selected features, but just under different names, you can pass .fit param 'feature names' to apply the correct names.)"
+        raise NameError(missing_feats_str)
+"""
 
 
 def _try_bin_fit_or_fittransform_(

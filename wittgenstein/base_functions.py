@@ -337,7 +337,7 @@ def recalibrate_proba(
         if sum(freqs) >= min_samples and freqs[0] >= required_correct_samples:
             rule.class_freqs = freqs
         else:
-            pass  # ignore Rules that don't have enough samples
+            rule.class_freqs = None
 
     # Assign Ruleset's uncovered frequencies
     if not hasattr(ruleset, "uncovered_class_freqs") or (
@@ -346,22 +346,22 @@ def recalibrate_proba(
         ruleset.uncovered_class_freqs = tn_fn
 
     # Warn if no pos or no neg samples
-    nopos = (
+    noneg = (
         sum([freqs[0] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[0]
     ) == 0
-    noneg = (
+    nopos = (
         sum([freqs[1] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[1]
     ) == 0
-    if nopos:
-        warning_str = f"No positive samples"
+    if noneg:
+        warning_str = f"No negative samples."
         _warn(
             warning_str,
             RuntimeWarning,
             filename="base_functions",
             funcname="recalibrate_proba",
         )
-    if noneg:
-        warning_str = f"No negative samples."
+    if nopos:
+        warning_str = f"No positive samples"
         _warn(
             warning_str,
             RuntimeWarning,

@@ -2,10 +2,11 @@
 
 import copy
 import math
-import warnings
 
 import numpy as np
 from numpy import var, mean
+
+from wittgenstein.check import _warn, _check_all_of_type
 
 
 class Ruleset:
@@ -25,7 +26,7 @@ class Ruleset:
 
     def __repr__(self):
         ruleset_str = self.__str__()
-        return f"<Ruleset object: {ruleset_str}>"
+        return f"<Ruleset {ruleset_str}>"
 
     def __getitem__(self, index):
         return self.rules[index]
@@ -205,6 +206,7 @@ class Ruleset:
         # N = []
 
         # collect probas
+        invalid_example_idx = []
         probas = np.empty(shape=(len(predictions), uncovered_proba.shape[0]))
         for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
             # n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
@@ -216,12 +218,25 @@ class Ruleset:
             # N.append(n)
             # elif p: # pos prediction
 
-            if not p:  # neg prediction
-                probas[i, :] = weighted_avg_freqs([rule.class_freqs for rule in cr])
-                # N.append(n)
-            elif p:  # pos prediction
+            if not p:
                 probas[i, :] = uncovered_proba
-                # N.append(uncovered_n)
+            else:
+                # Make sure only using rules that had enough samples to record
+                valid_class_freqs = [
+                    rule.class_freqs for rule in cr if rule.class_freqs is not None
+                ]
+                if valid_class_freqs:
+                    probas[i, :] = weighted_avg_freqs(valid_class_freqs)
+                else:
+                    probas[i, :] = 0
+                    invalid_example_idx.append(i)
+
+        # Warn if any examples didn't have large enough sample size of any rules
+        if invalid_example_idx:
+            warning_str = f"Some examples lacked any rule with sufficient sample size to predict_proba: {invalid_example_idx}\n Consider running recalibrate_proba with smaller param min_samples, or set require_min_samples=False"
+            _warn(
+                warning_str, RuntimeWarning, filename="base", funcname="predict_proba",
+            )
         # return probas (and optional extras)
         result = flagged_return([True, give_reasons], [probas, covering_rules])
         return result
@@ -269,6 +284,7 @@ class Rule:
         if conds is None:
             self.conds = []
         else:
+            # TODO: Could use check._check_all_of_type, but it may increase overhead
             self.conds = conds
 
     def __str__(self):
@@ -284,7 +300,7 @@ class Rule:
         return rule_str
 
     def __repr__(self):
-        return f"<Rule object: {str(self)}>"
+        return f"<Rule {str(self)}>"
 
     def __add__(self, cond):
         if isinstance(cond, Cond):
@@ -365,7 +381,7 @@ class Cond:
         return f"{self.feature}={self.val}"
 
     def __repr__(self):
-        return f"<Cond object: {self.feature}={self.val}>"
+        return f"<Cond {self.feature}={self.val}>"
 
     def __eq__(self, other):
         return self.feature == other.feature and self.val == other.val
