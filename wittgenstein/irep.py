@@ -110,25 +110,37 @@ class IREP(AbstractRulesetClassifier):
             Use algorithmic speed optimization.
 
         **kwargs
-            The following parameters are moving to the IREP constructor (__init__) function. For the time-being, both the constructor and fit functions will accept them, but passing them here using .fit will be deprecated:
+        --------
+        The following parameters are moving to the RIPPER constructor (__init__) function. For the time-being, both the constructor and fit functions will accept them, but passing them here using .fit will be deprecated:
 
-            n_discretize_bins : int, default=10
-                Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
-            random_state: int, default=None
-                Random seed for supporting repeatable results.
-            max_rules : int, default=None
-                Maximum number of rules.
-            max_rule_conds : int, default=None
-                Maximum number of conds per rule.
-            max_total_conds : int, default=None
-                Maximum number of total conds in entire ruleset.
+        prune_size : float, default=.33
+            Proportion of training set to be used for pruning.
+        n_discretize_bins : int, default=10
+            Fit apparent numeric attributes into a maximum of n_discretize_bins discrete bins, inclusive on upper part of range. Pass None to disable auto-discretization.
+        random_state : int, default=None
+            Random seed for repeatable results.
+
+        Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
+        max_rules : int, default=None
+            Maximum number of rules.
+        max_rule_conds : int, default=None
+            Maximum number of conds per rule.
+        max_total_conds : int, default=None
+            Maximum number of total conds in entire ruleset.
+
+        verbosity : int, default=0
+            Output progress, model development, and/or computation. Each level includes the information belonging to lower-value levels.
+               1: Show results of each major phase
+               2: Show Ruleset grow/optimization steps
+               3: Show Ruleset grow/optimization calculations
+               4: Show Rule grow/prune steps
+               5: Show Rule grow/prune calculations
         """
 
         # Stage 0: Setup
 
-        # Deal with hyperparam deprecation
-        # _check_param_deprecation(kwargs, self.VALID_HYPERPARAMETERS)
-        # self.set_params(**kwargs)
+        # Handle any hyperparam deprecation
+        self._set_deprecated_fit_params(kwargs)
 
         # Preprocess training data
         preprocess_params = {

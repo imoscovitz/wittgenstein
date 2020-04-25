@@ -1,20 +1,5 @@
 import warnings
 
-# def _get_non_default_params(param_values_defaults):
-
-#    non_default_params = []
-#    for param, (value, default) in param_values_defaults.items():
-#        if value != default:
-#            non_default_params.append(param)
-#    return non_default_params
-
-# def _check_fit_param_deprecation(param_values_defaults):
-#    non_default_params = _get_non_default_params(param_values_defaults)
-#    if non_default_params:
-#        _warn(f'.fit: In the future, define parameters: {non_default_params} when initializating IREP or RIPPER object instead of during model fitting.',
-#                DeprecationWarning,'irep/ripper','fit')
-
-
 def _warn(message, category, filename, funcname, warnstack=[]):
     """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
     message = "\n" + message + "\n"

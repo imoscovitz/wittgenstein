@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from wittgenstein.check import _check_is_model_fit
+from wittgenstein.check import _check_is_model_fit, _warn
 import wittgenstein.base_functions as base_functions
 import wittgenstein.preprocess as preprocess
 
@@ -225,3 +225,13 @@ class AbstractRulesetClassifier(ABC):
             # if parameter in self.VALID_HYPERPARAMETERS:
             setattr(self, parameter, value)
         return self
+
+    def _set_deprecated_fit_params(self, params):
+        """Handle setting parameters passed to .fit that should have been passed to __init__"""
+        found_deprecated_params = []
+        for param, value in params.items():
+            if param in self.VALID_HYPERPARAMETERS:
+                found_deprecated_params.append(param)
+                setattr(self, param, value)
+        if found_deprecated_params:
+            _warn(f'In the future, assign these parameters when initializating classifier instead of during model fitting: {found_deprecated_params}', DeprecationWarning,'irep/ripper','fit')
