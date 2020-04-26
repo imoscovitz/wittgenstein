@@ -3,7 +3,8 @@ import pandas as pd
 import pytest
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, cross_val_score
+from sklearn.metrics import precision_score, recall_score
 from sklearn.tree import DecisionTreeClassifier
 
 from wittgenstein import IREP, RIPPER
@@ -21,6 +22,21 @@ test_x, test_y = test.drop(CLASS_FEAT, axis=1), test[CLASS_FEAT]
 irep = IREP(random_state=42, verbosity=1)
 rip = RIPPER(random_state=42, verbosity=1)
 tree = DecisionTreeClassifier(random_state=42)
+
+
+def test_score():
+    irep.fit(train_x, train_y, pos_class="+")
+    assert irep.score(test_x, test_y, precision_score) == pytest.approx(0.8070175438596491)
+    assert irep.score(test_x, test_y, recall_score) == pytest.approx(0.7540983606557377)
+
+    rip.fit(train_x, train_y, pos_class="+")
+    assert rip.score(test_x, test_y, precision_score) == pytest.approx(0.8205128205128205)
+    assert rip.score(test_x, test_y, recall_score) == pytest.approx(0.5245901639344263)
+
+
+def test_cv():
+    cross_val_score(irep, train_x, train_y, cv=3)
+    cross_val_score(rip, train_x, train_y, cv=3)
 
 
 def test_grid_search():
