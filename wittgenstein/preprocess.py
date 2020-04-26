@@ -82,13 +82,13 @@ def preprocess_prediction_data(preprocess_params):
     df = _convert_to_df(X, y=None, class_feat=class_feat, requires_label=False)
 
     # STEP 2: CHECK THAT ALL MODEL FEAETURES ARE PRESENT IN X
-    df = _get_or_set_feature_names(
-        df,
-        class_feat,
-        user_requested_feature_names=user_requested_feature_names,
-        selected_features_=selected_features_,
-        trainset_features_=trainset_features_,
-    )
+    #df = _get_or_set_feature_names(
+    #    df,
+    #    class_feat,
+    #    user_requested_feature_names=user_requested_feature_names,
+    #    selected_features_=selected_features_,
+    #    trainset_features_=trainset_features_,
+    #)
 
     # STEP 3: ASK PANDAS TO CORRECT DTYPES
     df = df.infer_objects()
@@ -400,7 +400,7 @@ def find_numeric_feats(df, ignore_feats=[]):
 def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
     """
     Returns a dict definings fits for numerical features
-    A fit is an ordered list of tuples defining each bin's range
+    A fit is an ordered list of tuples defining each bin's range (min is exclusive; max is inclusive)
 
     Returned dict allows for fitting to training data and applying the same fit to test data
     to avoid information leak.
@@ -483,7 +483,7 @@ def bin_transform(df, fit_dict, names_precision=2):
 
         def renamed(bin_fit_list, value, names_precision=names_precision):
             """
-            Returns bin string name for a given numberical value
+            Returns bin string name for a given numerical value
             Assumes bin_fit_list is ordered
             """
             min_val, min_bin = bin_fit_list[0][0], bin_fit_list[0]

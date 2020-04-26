@@ -62,13 +62,13 @@ class AbstractRulesetClassifier(ABC):
 
         Parameters
         ----------
-            X: DataFrame, numpy array, or other iterable
-                examples to make predictions on. All selected features of the model should be present.
+        X: DataFrame, numpy array, or other iterable
+            examples to make predictions on. All selected features of the model should be present.
 
-            give_reasons : bool, default=False
-                Whether to provide reasons for each prediction made.
-            feature_names : list<str>, default=None
-                Specify feature names for X to orient X's features with selected features.
+        give_reasons : bool, default=False
+            Whether to provide reasons for each prediction made.
+        feature_names : list<str>, default=None
+            Specify feature names for X to orient X's features with selected features.
 
         Returns
         -------
