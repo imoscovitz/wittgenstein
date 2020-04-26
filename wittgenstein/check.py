@@ -1,5 +1,6 @@
 import warnings
 
+
 def _warn(message, category, filename, funcname, warnstack=[]):
     """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
     message = "\n" + message + "\n"

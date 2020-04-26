@@ -207,6 +207,8 @@ class IREP(AbstractRulesetClassifier):
         if cn_optimize:
             del self.cn
 
+        self.classes_ = np.array([0, 1])
+
     def _grow_ruleset(self, pos_df, neg_df):
         """Grow a Ruleset with (optional) pruning."""
 

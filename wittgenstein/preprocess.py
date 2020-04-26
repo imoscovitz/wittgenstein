@@ -82,13 +82,13 @@ def preprocess_prediction_data(preprocess_params):
     df = _convert_to_df(X, y=None, class_feat=class_feat, requires_label=False)
 
     # STEP 2: CHECK THAT ALL MODEL FEAETURES ARE PRESENT IN X
-    #df = _get_or_set_feature_names(
+    # df = _get_or_set_feature_names(
     #    df,
     #    class_feat,
     #    user_requested_feature_names=user_requested_feature_names,
     #    selected_features_=selected_features_,
     #    trainset_features_=trainset_features_,
-    #)
+    # )
 
     # STEP 3: ASK PANDAS TO CORRECT DTYPES
     df = df.infer_objects()

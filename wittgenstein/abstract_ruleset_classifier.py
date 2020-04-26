@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
 from wittgenstein.check import _check_is_model_fit, _warn
 import wittgenstein.base_functions as base_functions
@@ -36,6 +37,9 @@ class AbstractRulesetClassifier(ABC):
         self.max_total_conds = max_total_conds
         self.random_state = random_state
         self.verbosity = verbosity
+
+        # This is to help keep sklearn ensemble happy should someone want use it
+        self._estimator_type = "classifier"
 
     def __str__(self):
         """Returns string representation."""
@@ -162,6 +166,9 @@ class AbstractRulesetClassifier(ABC):
 
         X_df = preprocess.preprocess_prediction_data(preprocess_params)
 
+        # This is to help keep sklearn ensemble happy should someone want use it
+        self.classes_ = np.array([0, 1])
+
         return self.ruleset_.predict_proba(X_df, give_reasons=give_reasons)
 
     def recalibrate_proba(
@@ -234,4 +241,9 @@ class AbstractRulesetClassifier(ABC):
                 found_deprecated_params.append(param)
                 setattr(self, param, value)
         if found_deprecated_params:
-            _warn(f'In the future, assign these parameters when initializating classifier instead of during model fitting: {found_deprecated_params}', DeprecationWarning,'irep/ripper','fit')
+            _warn(
+                f"In the future, assign these parameters when initializating classifier instead of during model fitting: {found_deprecated_params}",
+                DeprecationWarning,
+                "irep/ripper",
+                "fit",
+            )

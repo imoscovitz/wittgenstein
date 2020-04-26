@@ -536,7 +536,7 @@ def pos_neg_split(df, class_feat, pos_class):
     return pos_df, neg_df
 
 
-def df_shuffled_split(df, split_size=.66, random_state=None):
+def df_shuffled_split(df, split_size=0.66, random_state=None):
     """ Returns tuple of shuffled and split DataFrame.
         split_size: proportion of rows to include in tuple[0]
     """
