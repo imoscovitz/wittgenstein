@@ -3,17 +3,18 @@
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
+import copy
+from functools import reduce
+import math
+import numpy as np
+import operator as op
+
+import pandas as pd
+from random import shuffle, seed
+
 from wittgenstein.base import Cond, Rule, Ruleset, rnd
 from wittgenstein.catnap import CatNap
 from wittgenstein.check import _warn
-
-import math
-from functools import reduce
-import operator as op
-import copy
-import pandas as pd
-import numpy as np
-from random import shuffle, seed
 
 ##########################
 ##### BASE FUNCTIONS #####
@@ -540,9 +541,8 @@ def df_shuffled_split(df, split_size=0.66, random_state=None):
     """ Returns tuple of shuffled and split DataFrame.
         split_size: proportion of rows to include in tuple[0]
     """
-    df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
-    split_at = int(len(df) * split_size)
-    return (df[:split_at], df[split_at:])
+    idx1, idx2 = random_split(range(len(df)), split_size, res_type=set, random_state=random_state)
+    return df.loc[idx1, :], df.loc[idx2, :]
 
 
 # Make sure seed is behaving correctly
@@ -553,6 +553,12 @@ def set_shuffled_split(set_to_split, split_size, random_state=None):
     split_at = int(len(list_to_split) * split_size)
     return (set(list_to_split[:split_at]), set(list_to_split[split_at:]))
 
+def random_split(to_split, split_size, res_type=set, random_state=None):
+    to_split = list(to_split)
+    seed(random_state)
+    shuffle(to_split)
+    split_at = int(len(to_split) * split_size)
+    return (res_type(to_split[:split_at]), res_type(to_split[split_at:]))
 
 def pos(df, class_feat, pos_class):
     """ Returns subset of instances that are labeled positive. """

@@ -21,9 +21,6 @@ X_NP = X_DF.values
 Y_NP = Y_DF.values
 NP_CLASS_FEAT = 0
 
-irep = IREP(random_state=42)
-rip = RIPPER(random_state=42)
-
 IREP_RULESET_42 = Ruleset(
     [
         Rule([Cond("physician-fee-freeze", "n")]),
@@ -65,6 +62,9 @@ def feat_to_num_rs(ruleset):
 
 
 def test_fit_Xy_df():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
     assert irep.ruleset_ == IREP_RULESET_42
 
@@ -73,6 +73,9 @@ def test_fit_Xy_df():
 
 
 def test_fit_X_y_df():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     irep.fit(X_DF, y=Y_DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
     assert irep.ruleset_ == IREP_RULESET_42
 
@@ -81,6 +84,9 @@ def test_fit_X_y_df():
 
 
 def test_fit_X_y_np():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     irep.fit(X_DF, y=Y_DF, pos_class=POS_CLASS)
     assert irep.ruleset_ == IREP_RULESET_42
 
@@ -89,6 +95,9 @@ def test_fit_X_y_np():
 
 
 def test_fit_Xy_np():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     irep.fit(XY_NP, y=None, class_feat=NP_CLASS_FEAT, pos_class=POS_CLASS)
     assert irep.ruleset_ == feat_to_num_rs(IREP_RULESET_42)
 
@@ -97,6 +106,8 @@ def test_fit_Xy_np():
 
 
 def test_fit_XY_rename_columns():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
 
     # With xy
     irep.fit(
@@ -117,6 +128,9 @@ def test_fit_XY_rename_columns():
     )
     assert rip.ruleset_ == RIP_RULESET_42
 
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     # With x_y
     irep.fit(
         X_NP,
@@ -136,6 +150,72 @@ def test_fit_XY_rename_columns():
     )
     assert rip.ruleset_ == RIP_RULESET_42
 
+def test_all_inputs_give_same_results():
+    for random_state in range(3):
+        irep_res = []
+        rip_res = []
+
+        irep = IREP(random_state=random_state)
+        rip = RIPPER(random_state=random_state)
+        irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        irep_res.append(irep.ruleset_)
+        rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        rip_res.append(rip.ruleset_)
+
+        irep = IREP(random_state=random_state)
+        rip = RIPPER(random_state=random_state)
+        irep.fit(X_DF, y=Y_DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        irep_res.append(irep.ruleset_)
+        rip.fit(X_DF, y=Y_DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        rip_res.append(rip.ruleset_)
+
+        irep = IREP(random_state=random_state)
+        rip = RIPPER(random_state=random_state)
+        irep.fit(X_DF, y=Y_DF, pos_class=POS_CLASS)
+        irep_res.append(irep.ruleset_)
+        rip.fit(X_DF, y=Y_DF, pos_class=POS_CLASS)
+        rip_res.append(rip.ruleset_)
+
+        irep = IREP(random_state=random_state)
+        rip = RIPPER(random_state=random_state)
+        irep.fit(
+            XY_NP,
+            y=None,
+            class_feat=CLASS_FEAT,
+            pos_class=POS_CLASS,
+            feature_names=DF.columns,
+        )
+        irep_res.append(irep.ruleset_)
+        rip.fit(
+            XY_NP,
+            y=None,
+            class_feat=CLASS_FEAT,
+            pos_class=POS_CLASS,
+            feature_names=DF.columns,
+        )
+        rip_res.append(rip.ruleset_)
+        irep = IREP(random_state=random_state)
+        rip = RIPPER(random_state=random_state)
+        irep.fit(
+            X_NP,
+            y=Y_NP,
+            class_feat=CLASS_FEAT,
+            pos_class=POS_CLASS,
+            feature_names=DF.drop(CLASS_FEAT, axis=1).columns,
+        )
+        irep_res.append(irep.ruleset_)
+        rip.fit(
+            X_NP,
+            y=Y_NP,
+            class_feat=CLASS_FEAT,
+            pos_class=POS_CLASS,
+            feature_names=DF.drop(CLASS_FEAT, axis=1).columns,
+        )
+        rip_res.append(rip.ruleset_)
+
+        assert all([res==irep_res[0] for res in irep_res])
+        assert all([res==rip_res[0] for res in rip_res])
+
 
 CREDIT_DF = pd.read_csv("credit.csv")
 CREDIT_CLASS_FEAT = "Class"
@@ -146,6 +226,9 @@ CREDIT_IREP_RULESET_42 = Ruleset([Rule([Cond("A9", "t")])])
 
 
 def test_fit_numeric_dataset():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
     irep.fit(
         CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS,
     )

@@ -565,11 +565,11 @@ class RIPPER(AbstractRulesetClassifier):
                 break
 
             # Grow-prune split remaining uncovered examples
-            pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(
-                pos_remaining_idx, (1 - prune_size), random_state=random_state
+            pos_growset_idx, pos_pruneset_idx = base_functions.random_split(
+                pos_remaining_idx, (1 - prune_size), res_type=set, random_state=random_state
             )
-            neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(
-                neg_remaining_idx, (1 - prune_size), random_state=random_state
+            neg_growset_idx, neg_pruneset_idx = base_functions.random_split(
+                neg_remaining_idx, (1 - prune_size), res_type=set, random_state=random_state
             )
             if self.verbosity >= 2:
                 print(

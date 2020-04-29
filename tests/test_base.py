@@ -8,10 +8,15 @@ from wittgenstein.base_functions import (
     df_shuffled_split,
     num_pos,
     num_neg,
+    df_shuffled_split,
+    set_shuffled_split,
+    random_split
+
 )
 from wittgenstein.base import Cond, Rule, Ruleset
 
-FIRST_10_EXAMPLES = pd.read_csv("house-votes-84.csv").head(10)
+FULL_DF = pd.read_csv("house-votes-84.csv")
+FIRST_10_EXAMPLES = FULL_DF.head(10)
 CLASS_FEAT = "Party"
 POS_CLASS = "democrat"
 SPLIT_SIZE = 0.6
@@ -144,3 +149,19 @@ def test_rule_num_covered():
         ]
     )
     assert rule_num_covered == len_assertion_df
+
+
+#### Functions
+
+### Ensure random states behave consistently:
+
+def test_random_split_set_shuffled_split_are_same():
+    ssp1, ssp2 = set_shuffled_split(range(len(FULL_DF)), .66, random_state=42)
+    rs1, rs2 = random_split(range(len(FULL_DF)), .66, res_type=list, random_state=42)
+    assert set(rs1) == set(ssp1)
+    assert set(rs2) == set(ssp2)
+
+def test_random_split_df_shuffled_split_are_same():
+    idx1, idx2 = random_split(FULL_DF.index, .66, res_type=set, random_state=42)
+    df1, df2 = df_shuffled_split(FULL_DF, split_size=0.66, random_state=42)
+    assert (set(FULL_DF.loc[idx1, :].index), set(FULL_DF.loc[idx2, :].index)) == (idx1, idx2)

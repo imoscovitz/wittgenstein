@@ -78,7 +78,7 @@ def preprocess_prediction_data(preprocess_params):
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 1: BUILD DataFrame from X_or_Xy (and if necessary y). DO NOT MODIFY ORIGINAL DATA
+    # STEP 1: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
     df = _convert_to_df(X, y=None, class_feat=class_feat, requires_label=False)
 
     # STEP 2: CHECK THAT ALL MODEL FEAETURES ARE PRESENT IN X
@@ -123,8 +123,13 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). DO NOT MODIFY ORIGINAL DATA
-    df = _convert_to_df(X_or_Xy, y, class_feat)
+    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
+    df = _convert_to_df(
+        X_or_Xy,
+        y,
+        class_feat,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # STEP 4: GET_OR_SET FEATURE NAMES
     # df = _get_or_set_feature_names(

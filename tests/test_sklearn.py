@@ -26,11 +26,15 @@ tree = DecisionTreeClassifier(random_state=42)
 
 def test_score():
     irep.fit(train_x, train_y, pos_class="+")
-    assert irep.score(test_x, test_y, precision_score) == pytest.approx(0.8070175438596491)
+    assert irep.score(test_x, test_y, precision_score) == pytest.approx(
+        0.8070175438596491
+    )
     assert irep.score(test_x, test_y, recall_score) == pytest.approx(0.7540983606557377)
 
     rip.fit(train_x, train_y, pos_class="+")
-    assert rip.score(test_x, test_y, precision_score) == pytest.approx(0.8205128205128205)
+    assert rip.score(test_x, test_y, precision_score) == pytest.approx(
+        0.8205128205128205
+    )
     assert rip.score(test_x, test_y, recall_score) == pytest.approx(0.5245901639344263)
 
 

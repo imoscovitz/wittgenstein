@@ -115,7 +115,7 @@ class AbstractRulesetClassifier(ABC):
 
         score_function : function, default=score_accuracy
             Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
-            this optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
+            This optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
 
         _check_is_model_fit(self)
@@ -167,7 +167,8 @@ class AbstractRulesetClassifier(ABC):
         X_df = preprocess.preprocess_prediction_data(preprocess_params)
 
         # This is to help keep sklearn ensemble happy should someone want use it
-        self.classes_ = np.array([0, 1])
+        # self.classes_ = np.array([0, 1])
+        self.classes_ = np.array([f"not {self.pos_class}", self.pos_class])
 
         return self.ruleset_.predict_proba(X_df, give_reasons=give_reasons)
 
@@ -229,7 +230,6 @@ class AbstractRulesetClassifier(ABC):
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
-            # if parameter in self.VALID_HYPERPARAMETERS:
             setattr(self, parameter, value)
         return self
 
@@ -242,7 +242,7 @@ class AbstractRulesetClassifier(ABC):
                 setattr(self, param, value)
         if found_deprecated_params:
             _warn(
-                f"In the future, assign these parameters when initializating classifier instead of during model fitting: {found_deprecated_params}",
+                f"In the future, you should assign these parameters when initializating classifier instead of during model fitting: {found_deprecated_params}",
                 DeprecationWarning,
                 "irep/ripper",
                 "fit",

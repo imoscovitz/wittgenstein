@@ -200,7 +200,7 @@ class IREP(AbstractRulesetClassifier):
         # Fit probas
         # if self.verbosity>=1: print('\ncalibrating probas for predict_proba...\n')
         self.recalibrate_proba(
-            df, min_samples=None, require_min_samples=False, discretize=False
+            df, min_samples=None, require_min_samples=False, discretize=False#, feature_names=feature_names
         )
 
         # Cleanup
@@ -328,11 +328,11 @@ class IREP(AbstractRulesetClassifier):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
-            pos_growset_idx, pos_pruneset_idx = base_functions.set_shuffled_split(
-                pos_remaining_idx, (1 - prune_size), random_state=self.random_state
+            pos_growset_idx, pos_pruneset_idx = base_functions.random_split(
+                pos_remaining_idx, (1 - prune_size), res_type=set, random_state=self.random_state
             )
-            neg_growset_idx, neg_pruneset_idx = base_functions.set_shuffled_split(
-                neg_remaining_idx, (1 - prune_size), random_state=self.random_state
+            neg_growset_idx, neg_pruneset_idx = base_functions.random_split(
+                neg_remaining_idx, (1 - prune_size), res_type=set, random_state=self.random_state
             )
 
             if self.verbosity >= 2:
