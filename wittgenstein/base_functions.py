@@ -13,7 +13,6 @@ import pandas as pd
 from random import shuffle, seed
 
 from wittgenstein.base import Cond, Rule, Ruleset, rnd
-from wittgenstein.catnap import CatNap
 from wittgenstein.check import _warn
 
 ##########################
@@ -69,8 +68,10 @@ def grow_rule_cn(
         print(f"growing rule from initial rule: {rule0}")
 
     num_neg_covered = len(cn.rule_covers(rule0, subset=neg_idx))
-    user_halt = max_rule_conds is not None and len(rule1.conds) >= max_rule_conds
     while num_neg_covered > 0:  # Stop refining rule if no negative examples remain
+        user_halt = max_rule_conds is not None and len(rule1.conds) >= max_rule_conds
+        if user_halt: break
+
         rule1 = best_rule_successor_cn(cn, rule0, pos_idx, neg_idx, verbosity=verbosity)
         if rule1 is None:
             break
@@ -541,7 +542,7 @@ def df_shuffled_split(df, split_size=0.66, random_state=None):
     """ Returns tuple of shuffled and split DataFrame.
         split_size: proportion of rows to include in tuple[0]
     """
-    idx1, idx2 = random_split(range(len(df)), split_size, res_type=set, random_state=random_state)
+    idx1, idx2 = random_split(df.index, split_size, res_type=set, random_state=random_state)
     return df.loc[idx1, :], df.loc[idx2, :]
 
 

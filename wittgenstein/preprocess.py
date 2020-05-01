@@ -1,8 +1,9 @@
 import numpy as np
+from numpy import mean, var
 import pandas as pd
 
 from wittgenstein.check import _check_any_datasets_not_empty
-from wittgenstein.base_functions import truncstr
+from wittgenstein.base_functions import truncstr, rnd
 
 
 def preprocess_training_data(preprocess_params):
@@ -37,11 +38,6 @@ def preprocess_training_data(preprocess_params):
 
     # STEP 3: DEFINE pos_class
     pos_class = get_pos_class(df, class_feat, pos_class)
-
-    # STEP 4: GET_OR_SET FEATURE NAMES
-    # df = _get_or_set_feature_names(
-    #    df, class_feat, user_requested_feature_names=user_requested_feature_names
-    # )
 
     # STEP 5: INFER FEATURE DTYPES
     df = df.infer_objects()
@@ -258,18 +254,20 @@ def _convert_to_df(
 def get_pos_class(df, class_feat, pos_class):
 
     # Pos class already known
-    if pos_class:
+    if pos_class is not None:
         return pos_class
 
     # Check if pos class can be inferred as True or 1
-    y_unique = df[class_feat].unique()
-    if len(y_unique) == 2:
-        class_labels = sorted(y_unique.tolist())
-        if (
-            class_labels[0] is 0 and class_labels[1] is 1
-        ):  # 'is' operator is essential to distinguish 1,True, etc.
+    class_values = sorted(df[class_feat].unique())
+    if len(class_values) == 2:
+        # Convert numpy int64 to native python int
+        try:
+            class_values = [class_values[0].item(), class_values[1].item()]
+        except:
+            pass
+        if class_values[0] is 0 and class_values[1] is 1:
             return 1
-        elif class_labels[0] is False and class_labels[1] is True:
+        elif class_values[0] is False and class_values[1] is True:
             return True
 
     # Can't infer classes
@@ -366,13 +364,13 @@ def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
         return df, None
 
     isbinned = False
-    numeric_feats = find_numeric_feats(df, ignore_feats=ignore_feats)
-    if numeric_feats:
-        if n_discretize_bins:
+    continuous_feats = find_continuous_feats(df, n_discretize_bins=n_discretize_bins, ignore_feats=ignore_feats)
+    if n_discretize_bins:
+        if continuous_feats:
             if verbosity == 1:
                 print(f"binning data...\n")
             elif verbosity >= 2:
-                print(f"binning features {numeric_feats}...")
+                print(f"binning features {continuous_feats}...")
             binned_df = df.copy()
             bin_transformer = fit_bins(
                 binned_df,
@@ -383,23 +381,34 @@ def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
             )
             binned_df = bin_transform(binned_df, bin_transformer)
             isbinned = True
-        else:
-            n_unique_values = sum(
-                [len(u) for u in [df[f].unique() for f in numeric_feats]]
-            )
-            warning_str = f"There are {len(numeric_feats)} apparent numeric features: {numeric_feats}. \n Treating {n_unique_values} numeric values as nominal. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'"
-            _warn(warning_str, RuntimeWarning, filename="base", funcname="bin_df")
+    else:
+        n_unique_values = sum(
+            [len(u) for u in [df[f].unique() for f in continuous_feats]]
+        )
+        warning_str = f"There are {len(continuous_feats)} features to be treated as continuous: {continuous_feats}. \n Treating {n_unique_values} numeric values as nominal or discrete. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'"
+        _warn(warning_str, RuntimeWarning, filename="base", funcname="bin_df")
     if isbinned:
         return binned_df, bin_transformer
     else:
         return df, None
 
 
-def find_numeric_feats(df, ignore_feats=[]):
-    """ Returns df features that seem to be numeric. """
-    numeric_feats = df.select_dtypes(np.number)
-    numeric_feats = [f for f in numeric_feats if f not in ignore_feats]
-    return numeric_feats
+def find_continuous_feats(df, n_discretize_bins, ignore_feats=[]):
+    """ Returns df features that seem to be continuous. """
+
+    if not n_discretize_bins:
+        return []
+
+    # Find numeric features
+    cont_feats = df.select_dtypes(np.number).columns
+
+    # Remove discrete features
+    cont_feats = [f for f in cont_feats if len(df[f].unique())>n_discretize_bins]
+
+    # Remove ignore features
+    cont_feats = [f for f in cont_feats if f not in ignore_feats]
+
+    return cont_feats
 
 
 def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
@@ -461,7 +470,7 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
 
     # Create dict to store fit definitions for each feature
     fit_dict = {}
-    feats_to_fit = find_numeric_feats(df, ignore_feats=ignore_feats)
+    feats_to_fit = find_continuous_feats(df, n_bins, ignore_feats=ignore_feats)
     if verbosity == 2:
         print(f"fitting bins for features {feats_to_fit}")
     if verbosity >= 2:

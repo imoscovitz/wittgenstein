@@ -79,6 +79,15 @@ class Ruleset:
         )
         print(ruleset_str)
 
+    def isuniversal(self):
+        if len(self.rules) >= 1:
+            return all(rule.isempty() for rule in self.rules)
+        else:
+            return False
+
+    def isnull(self):
+        return len(self.rules) == 0
+
     def copy(self, n_rules_limit=None):
         """ Returns a deep copy of self.
 
