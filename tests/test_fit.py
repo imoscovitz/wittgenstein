@@ -150,7 +150,25 @@ def test_fit_XY_rename_columns():
     )
     assert rip.ruleset_ == RIP_RULESET_42
 
-def test_all_inputs_give_same_results():
+
+def test_infer_pos_class():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
+    infer_df = DF.copy()
+    infer_df[CLASS_FEAT] = infer_df[CLASS_FEAT].map(lambda x:1 if x=='democrat' else 0)
+
+    irep.fit(
+        infer_df, class_feat=CLASS_FEAT,
+    )
+    assert irep.ruleset_ == IREP_RULESET_42
+    rip.fit(
+        infer_df, class_feat=CLASS_FEAT,
+    )
+    assert rip.ruleset_ == RIP_RULESET_42
+
+
+def test_same_inputs_give_same_results():
     for random_state in range(3):
         irep_res = []
         rip_res = []
@@ -213,8 +231,8 @@ def test_all_inputs_give_same_results():
         )
         rip_res.append(rip.ruleset_)
 
-        assert all([res==irep_res[0] for res in irep_res])
-        assert all([res==rip_res[0] for res in rip_res])
+        assert all([res == irep_res[0] for res in irep_res])
+        assert all([res == rip_res[0] for res in rip_res])
 
 
 CREDIT_DF = pd.read_csv("credit.csv")
@@ -233,3 +251,35 @@ def test_fit_numeric_dataset():
         CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS,
     )
     assert irep.ruleset_ == CREDIT_IREP_RULESET_42
+
+
+def test_fit_boolean_dataset():
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
+    def tobool(x):
+        if x=='y':
+            return 0
+        elif x=='n':
+            return 1
+        else:
+            return 2
+    bool_df = DF.copy()
+    for col in bool_df.drop('Party',axis=1).columns:
+        bool_df[col] = bool_df[col].map(tobool)
+    irep.fit(bool_df, class_feat='Party', pos_class='democrat')
+    assert not(irep.ruleset_.isuniversal()) and not(irep.ruleset_.isnull())
+
+
+def test_fit_discrete_dataset():
+
+    irep = IREP(random_state=0, n_discretize_bins=11)
+    rip = RIPPER(random_state=0, n_discretize_bins=11)
+
+    discrete_df = CREDIT_DF.select_dtypes(float).applymap(lambda x:int(x%10))
+    discrete_df[CREDIT_CLASS_FEAT] = CREDIT_DF[CREDIT_CLASS_FEAT]
+
+    irep.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert not(irep.ruleset_.isuniversal()) and not(irep.ruleset_.isnull())
+    rip.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert not(rip.ruleset_.isuniversal()) and not(rip.ruleset_.isnull())

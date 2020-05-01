@@ -10,8 +10,7 @@ from wittgenstein.base_functions import (
     num_neg,
     df_shuffled_split,
     set_shuffled_split,
-    random_split
-
+    random_split,
 )
 from wittgenstein.base import Cond, Rule, Ruleset
 
@@ -155,13 +154,18 @@ def test_rule_num_covered():
 
 ### Ensure random states behave consistently:
 
+
 def test_random_split_set_shuffled_split_are_same():
-    ssp1, ssp2 = set_shuffled_split(range(len(FULL_DF)), .66, random_state=42)
-    rs1, rs2 = random_split(range(len(FULL_DF)), .66, res_type=list, random_state=42)
+    ssp1, ssp2 = set_shuffled_split(range(len(FULL_DF)), 0.66, random_state=42)
+    rs1, rs2 = random_split(range(len(FULL_DF)), 0.66, res_type=list, random_state=42)
     assert set(rs1) == set(ssp1)
     assert set(rs2) == set(ssp2)
 
+
 def test_random_split_df_shuffled_split_are_same():
-    idx1, idx2 = random_split(FULL_DF.index, .66, res_type=set, random_state=42)
+    idx1, idx2 = random_split(FULL_DF.index, 0.66, res_type=set, random_state=42)
     df1, df2 = df_shuffled_split(FULL_DF, split_size=0.66, random_state=42)
-    assert (set(FULL_DF.loc[idx1, :].index), set(FULL_DF.loc[idx2, :].index)) == (idx1, idx2)
+    assert (set(FULL_DF.loc[idx1, :].index), set(FULL_DF.loc[idx2, :].index)) == (
+        idx1,
+        idx2,
+    )

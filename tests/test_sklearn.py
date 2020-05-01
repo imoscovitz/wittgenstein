@@ -14,55 +14,86 @@ DF = pd.read_csv("credit.csv")
 DF = DF.head(len(DF) // 3)
 CLASS_FEAT = "Class"
 POS_CLASS = "+"
+DF[CLASS_FEAT] = DF[CLASS_FEAT].map(lambda x:1 if x==POS_CLASS else 0)
+POS_CLASS = 1
 
 train, test = df_shuffled_split(DF, random_state=42)
 train_x, train_y = train.drop(CLASS_FEAT, axis=1), train[CLASS_FEAT]
 test_x, test_y = test.drop(CLASS_FEAT, axis=1), test[CLASS_FEAT]
 
-irep = IREP(random_state=42, verbosity=1)
-rip = RIPPER(random_state=42, verbosity=1)
-tree = DecisionTreeClassifier(random_state=42)
-
 
 def test_score():
-    irep.fit(train_x, train_y, pos_class="+")
-    assert irep.score(test_x, test_y, precision_score) == pytest.approx(
-        0.8070175438596491
-    )
-    assert irep.score(test_x, test_y, recall_score) == pytest.approx(0.7540983606557377)
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
 
-    rip.fit(train_x, train_y, pos_class="+")
-    assert rip.score(test_x, test_y, precision_score) == pytest.approx(
-        0.8205128205128205
-    )
-    assert rip.score(test_x, test_y, recall_score) == pytest.approx(0.5245901639344263)
+    irep.fit(train_x, train_y)
+    assert irep.score(test_x, test_y, precision_score) > .5
+    assert irep.score(test_x, test_y, recall_score) > .5
+
+    rip.fit(train_x, train_y)
+    assert rip.score(test_x, test_y, precision_score) > .5
+    assert rip.score(test_x, test_y, recall_score) > .5
 
 
 def test_cv():
-    cross_val_score(irep, train_x, train_y, cv=3)
-    cross_val_score(rip, train_x, train_y, cv=3)
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
+    assert max(cross_val_score(irep, train_x, train_y, cv=3)) > .5
+    assert max(cross_val_score(rip, train_x, train_y, cv=3)) > .5
 
 
 def test_grid_search():
+    irep = IREP(random_state=42, verbosity=1)
+    rip = RIPPER(random_state=42, verbosity=1)
+
     param_grid = {"prune_size": [0.33, 0.5], "max_total_conds": [3, None]}
     grid = GridSearchCV(estimator=irep, param_grid=param_grid, cv=2)
-    grid.fit(train_x, train_y, pos_class="+")
+    grid.fit(train_x, train_y)
 
     param_grid = {"prune_size": [0.33, 0.5], "k": [1, 2]}
     grid = GridSearchCV(estimator=rip, param_grid=param_grid, cv=2)
-    grid.fit(train_x, train_y, pos_class="+")
+    grid.fit(train_x, train_y)
 
 
+# This doesn't work. You first need to make dummies X_train, but it only generates a null ruleset
 def test_stacking():
-    skirep = IREP(random_state=42)
-    sklearnable_df = DF.copy()
-    sklearnable_df["Class"] = sklearnable_df["Class"].map(
-        lambda x: 1 if x == "+" else 0
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
+
+    df = DF.copy()
+    numeric_cols = df.select_dtypes('number').columns
+    categorical_cols = [col for col in df.columns if
+                    (col not in numeric_cols and not col==CLASS_FEAT)]
+    dum_df = pd.get_dummies(df[categorical_cols])
+    for col in numeric_cols:
+        dum_df[col] = df[col]
+    dum_df[CLASS_FEAT] = df[CLASS_FEAT]
+    sktrain, sktest = df_shuffled_split(dum_df, random_state=42)
+    sktrain_x, sktrain_y = sktrain.drop(CLASS_FEAT, axis=1), train[CLASS_FEAT]
+    sktest_x, sktest_y = sktest.drop(CLASS_FEAT, axis=1), test[CLASS_FEAT]
+
+    lone_tree = DecisionTreeClassifier(random_state=42)
+    lone_tree.fit(sktrain_x, sktrain_y)
+    lone_tree_score = lone_tree.score(sktest_x, sktest_y)
+    #print('lone_tree_score',lone_tree_score)
+
+    irep_tree = DecisionTreeClassifier(random_state=42)
+    irep_stack_estimators = [("irep", irep), ("tree", irep_tree)]
+    irep_stack = StackingClassifier(
+        estimators=irep_stack_estimators, final_estimator=LogisticRegression()
     )
-    sktrain_y = sklearnable_df["Class"]
-    sktrain_x = sklearnable_df.drop("Class", axis=1).select_dtypes(include=["float64"])
-    estimators = [("irep", irep), ("tree", tree)]
-    clf = StackingClassifier(
-        estimators=estimators, final_estimator=LogisticRegression()
+    irep_stack.fit(sktrain_x, sktrain_y)
+    irep_stack_score = irep_stack.score(sktest_x, sktest_y)
+    #print('irep_stack_score', irep_stack_score)
+    assert irep_stack_score > lone_tree_score
+
+    rip_tree = DecisionTreeClassifier(random_state=42)
+    rip_stack_estimators = [("rip", rip), ("tree", rip_tree)]
+    rip_stack = StackingClassifier(
+        estimators=rip_stack_estimators, final_estimator=LogisticRegression()
     )
-    clf.fit(sktrain_x, sktrain_y)  # .score(test_x, test_y)
+    rip_stack.fit(sktrain_x, sktrain_y)
+    rip_stack_score = rip_stack.score(sktest_x, sktest_y)
+    #print('rip_stack_score',rip_stack_score)
+    assert rip_stack_score > lone_tree_score
