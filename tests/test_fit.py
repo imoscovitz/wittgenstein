@@ -156,7 +156,9 @@ def test_infer_pos_class():
     rip = RIPPER(random_state=42)
 
     infer_df = DF.copy()
-    infer_df[CLASS_FEAT] = infer_df[CLASS_FEAT].map(lambda x:1 if x=='democrat' else 0)
+    infer_df[CLASS_FEAT] = infer_df[CLASS_FEAT].map(
+        lambda x: 1 if x == "democrat" else 0
+    )
 
     irep.fit(
         infer_df, class_feat=CLASS_FEAT,
@@ -258,17 +260,18 @@ def test_fit_boolean_dataset():
     rip = RIPPER(random_state=42)
 
     def tobool(x):
-        if x=='y':
+        if x == "y":
             return 0
-        elif x=='n':
+        elif x == "n":
             return 1
         else:
             return 2
+
     bool_df = DF.copy()
-    for col in bool_df.drop('Party',axis=1).columns:
+    for col in bool_df.drop("Party", axis=1).columns:
         bool_df[col] = bool_df[col].map(tobool)
-    irep.fit(bool_df, class_feat='Party', pos_class='democrat')
-    assert not(irep.ruleset_.isuniversal()) and not(irep.ruleset_.isnull())
+    irep.fit(bool_df, class_feat="Party", pos_class="democrat")
+    assert not (irep.ruleset_.isuniversal()) and not (irep.ruleset_.isnull())
 
 
 def test_fit_discrete_dataset():
@@ -276,10 +279,10 @@ def test_fit_discrete_dataset():
     irep = IREP(random_state=0, n_discretize_bins=11)
     rip = RIPPER(random_state=0, n_discretize_bins=11)
 
-    discrete_df = CREDIT_DF.select_dtypes(float).applymap(lambda x:int(x%10))
+    discrete_df = CREDIT_DF.select_dtypes(float).applymap(lambda x: int(x % 10))
     discrete_df[CREDIT_CLASS_FEAT] = CREDIT_DF[CREDIT_CLASS_FEAT]
 
     irep.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert not(irep.ruleset_.isuniversal()) and not(irep.ruleset_.isnull())
+    assert not (irep.ruleset_.isuniversal()) and not (irep.ruleset_.isnull())
     rip.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert not(rip.ruleset_.isuniversal()) and not(rip.ruleset_.isnull())
+    assert not (rip.ruleset_.isuniversal()) and not (rip.ruleset_.isnull())

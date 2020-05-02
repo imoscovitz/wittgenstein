@@ -1,5 +1,3 @@
-""" Base functions for Ruleset classifiers """
-
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
@@ -19,7 +17,7 @@ from wittgenstein.check import _warn
 ##### BASE FUNCTIONS #####
 ##########################
 
-# Possible optimization: remove data after each added cond?
+
 def grow_rule(
     pos_df,
     neg_df,
@@ -28,7 +26,7 @@ def grow_rule(
     max_rule_conds=None,
     verbosity=0,
 ):
-    """ Fit a new rule to add to a ruleset """
+    """Fit a new rule to add to a ruleset"""
 
     rule0 = copy.deepcopy(initial_rule)
     if verbosity >= 4:
@@ -56,11 +54,10 @@ def grow_rule(
         return rule0
 
 
-# Possible optimization: remove data after each added cond?
 def grow_rule_cn(
     cn, pos_idx, neg_idx, initial_rule=Rule(), max_rule_conds=None, verbosity=0
 ):
-    """ Fit a new rule to add to a ruleset """
+    """Fit a new rule to add to a ruleset. (Optimized version.)"""
 
     rule0 = copy.deepcopy(initial_rule)
     rule1 = copy.deepcopy(rule0)
@@ -70,7 +67,8 @@ def grow_rule_cn(
     num_neg_covered = len(cn.rule_covers(rule0, subset=neg_idx))
     while num_neg_covered > 0:  # Stop refining rule if no negative examples remain
         user_halt = max_rule_conds is not None and len(rule1.conds) >= max_rule_conds
-        if user_halt: break
+        if user_halt:
+            break
 
         rule1 = best_rule_successor_cn(cn, rule0, pos_idx, neg_idx, verbosity=verbosity)
         if rule1 is None:
@@ -98,17 +96,23 @@ def prune_rule(
     eval_index_on_ruleset=None,
     verbosity=0,
 ):
-    """ Returns a pruned version of the Rule by removing Conds
+    """Return a pruned version of the Rule by removing Conds.
 
-        rule: Rule to prune
-        prune_metric: function that returns value to maximize
-        pos_pruneset: df of positive class examples
-        neg_pruneset: df of non-positive class examples
+    rule : Rule
+        Rule to prune.
+    prune_metric : function
+        Function that returns a value to maximize.
+    pos_pruneset : DataFrame
+        Positive class examples.
+    neg_pruneset : DataFrame
+        Negative class examples.
 
-        eval_index_on_ruleset (optional): tuple(rule_index, ruleset)
-            pass the rest of the Rule's Ruleset (excluding the Rule in question),
-            in order to prune the rule based on the performance of its entire Ruleset,
-            rather than on the rule alone. For use during optimization stage.
+    eval_index_on_ruleset : tuple(rule_index, Ruleset), default=None
+        Pass the rest of the Rule's Ruleset (excluding the Rule in question),
+        in order to prune the rule based on the performance of its entire Ruleset,
+        rather than on the rule alone. Used during optimization stage of RIPPER.
+    verbosity : int (0-5), default=0
+        Output verbosity.
     """
 
     if rule.isempty():
@@ -176,17 +180,23 @@ def prune_rule(
 def prune_rule_cn(
     cn, rule, prune_metric_cn, pos_idx, neg_idx, eval_index_on_ruleset=None, verbosity=0
 ):
-    """ Returns a pruned version of the Rule by removing Conds
+    """Return a pruned version of the Rule by removing Conds. (Optimized version.)
 
-        rule: Rule to prune
-        prune_metric: function that returns value to maximize
-        pos_pruneset: df of positive class examples
-        neg_pruneset: df of non-positive class examples
+    rule : Rule
+        Rule to prune.
+    prune_metric : function
+        Function that returns a value to maximize.
+    pos_pruneset : DataFrame
+        Positive class examples.
+    neg_pruneset : DataFrame
+        Negative class examples.
 
-        eval_index_on_ruleset (optional): tuple(rule_index, ruleset)
-            pass the rest of the Rule's Ruleset (excluding the Rule in question),
-            in order to prune the rule based on the performance of its entire Ruleset,
-            rather than on the rule alone. For use during optimization stage.
+    eval_index_on_ruleset : tuple(rule_index, Ruleset), default=None
+        Pass the rest of the Rule's Ruleset (excluding the Rule in question),
+        in order to prune the rule based on the performance of its entire Ruleset,
+        rather than on the rule alone. Used during optimization stage of RIPPER.
+    verbosity : int (0-5), default=0
+        Output verbosity.
     """
 
     if rule.isempty():
@@ -254,17 +264,26 @@ def prune_rule_cn(
 def recalibrate_proba(
     ruleset, Xy_df, class_feat, pos_class, min_samples=10, require_min_samples=True
 ):
-    """ Recalibrate a Ruleset's probability estimations using unseen labeled data without changing the underlying model. May improve .predict_proba generalizability.
-        Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
+    """Recalibrate a Ruleset's probability estimations using unseen labeled data without changing the underlying model. May improve .predict_proba generalizability.
+    Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
 
-        Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
-        Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
+    Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
+    Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.
 
-        Xy_df <DataFrame>: labeled data
+    ruleset : Ruleset
+        Ruleset to recalibrate.
+    Xy_df : DataFrame
+        Labeled dataset.
+    class_feat : str
+        Name of class feature column in Xy_df.
+    pos_class : value, typically str or int
+        Positive class value.
 
-        min_samples <int> (optional): required minimum number of samples per Rule. (default=10) Regardless of min_samples, at least one sample of the correct class will always be required.
-        require_min_samples <bool> (optional): True: halt (with warning) in case min_samples not achieved for all Rules
-                                               False: warn, but still replace Rules that have enough samples
+    min_samples : int, default=10
+        Required minimum number of samples per Rule. Regardless of min_samples, at least one sample of the correct class is always required.
+    require_min_samples : bool, default=True
+        Halt (with warning) if any Rule lacks the minimum number of samples.
+        Setting to False will warn, but still replace Rules probabilities even if the minimum number of samples is not met.
     """
 
     # At least this many samples per rule (or neg) must be of correct class
@@ -371,28 +390,13 @@ def recalibrate_proba(
             funcname="recalibrate_proba",
         )
 
-
-###################
-##### METRICS #####
-###################
-
-
-def possible_conds(df):
-    """ Create and return a list of all possible conds from a categorical dataframe. """
-
-    possible_conds = []
-    for feat in pos_df.columns.values:
-        for val in set(pos_df[feat].unique()):
-            self.possible_conds.append(Cond(feat, val))
-    return possible_conds
-
     ###################
     ##### METRICS #####
     ###################
 
 
 def gain(before, after, pos_df, neg_df):
-    """ Returns the information gain from self to other """
+    """Calculates the information gain from before to after."""
     p0count = before.num_covered(pos_df)
     p1count = after.num_covered(pos_df)
     n0count = before.num_covered(neg_df)
@@ -404,25 +408,21 @@ def gain(before, after, pos_df, neg_df):
 
 
 def gain_cn(cn, cond_step, rule_covers_pos_idx, rule_covers_neg_idx):
-    """ Returns the information gain from self to other """
-    # print('gain_cn', len(rule_covers_pos_idx), len(rule_covers_neg_idx))
-
+    """Calculates the information gain from adding a Cond."""
     p0count = len(rule_covers_pos_idx)
     p1count = len(cn.cond_covers(cond_step, subset=rule_covers_pos_idx))
     n0count = len(rule_covers_neg_idx)
     n1count = len(cn.cond_covers(cond_step, subset=rule_covers_neg_idx))
-    g = p1count * (
+    return p1count * (
         math.log2((p1count + 1) / (p1count + n1count + 1))
         - math.log2((p0count + 1) / (p0count + n0count + 1))
     )
-    # if p1count > p0count or n1count > n0count:
-    #    print(cond_step, p0count, p1count, n0count, n1count, rnd(g))
-    return g
 
 
 def precision(object, pos_df, neg_df):
-    """ Returns precision value of object's classification.
-        object: Cond, Rule, or Ruleset
+    """Calculate precision value of object's classification.
+
+    object : Cond, Rule, or Ruleset
     """
 
     pos_covered = object.covers(pos_df)
@@ -435,6 +435,11 @@ def precision(object, pos_df, neg_df):
 
 
 def rule_precision_cn(cn, rule, pos_idx, neg_idx):
+    """Calculate precision value of object's classification.
+
+    object : Cond, Rule, or Ruleset
+    """
+
     pos_covered = cn.rule_covers(rule, pos_idx)
     neg_covered = cn.rule_covers(rule, neg_idx)
     total_n_covered = len(pos_covered) + len(neg_covered)
@@ -445,10 +450,12 @@ def rule_precision_cn(cn, rule, pos_idx, neg_idx):
 
 
 def score_accuracy(predictions, actuals):
-    """ For evaluating trained model on test set.
+    """Calculate accuracy score of a trained model on a test set.
 
-        predictions: <iterable<bool>> True for predicted positive class, False otherwise
-        actuals:     <iterable<bool>> True for actual positive class, False otherwise
+    predictions : iterable<bool>
+        True for predicted positive class, False otherwise.
+    actuals : iterable<bool>
+        True for actual positive class, False otherwise.
     """
     t = [pr for pr, act in zip(predictions, actuals) if pr == act]
     n = predictions
@@ -456,8 +463,9 @@ def score_accuracy(predictions, actuals):
 
 
 def _accuracy(object, pos_pruneset, neg_pruneset):
-    """ Returns accuracy value of object's classification.
-        object: Cond, Rule, or Ruleset
+    """Calculate accuracy value of object's classification.
+
+    object : Cond, Rule, or Ruleset
     """
     P = len(pos_pruneset)
     N = len(neg_pruneset)
@@ -470,8 +478,9 @@ def _accuracy(object, pos_pruneset, neg_pruneset):
 
 
 def _rule_accuracy_cn(cn, rule, pos_pruneset_idx, neg_pruneset_idx):
-    """ Returns accuracy value of object's classification.
-        object: Cond, Rule, or Ruleset
+    """Calculate accuracy value of object's classification.
+
+    object: Cond, Rule, or Ruleset
     """
     P = len(pos_pruneset_idx)
     N = len(neg_pruneset_idx)
@@ -484,10 +493,7 @@ def _rule_accuracy_cn(cn, rule, pos_pruneset_idx, neg_pruneset_idx):
 
 
 def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
-    """ Returns for a Rule its best successor Rule according to FOIL information gain metric.
-
-        eval_on_ruleset: option to evaluate gain with extra disjoined rules (for use with RIPPER's post-optimization)
-    """
+    """Return for a Rule its best successor Rule according to FOIL information gain metric."""
 
     best_gain = 0
     best_successor_rule = None
@@ -502,8 +508,9 @@ def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
     return best_successor_rule
 
 
-# Can possibly further optimize by not rechecking rule each time but just cond
 def best_rule_successor_cn(cn, rule, pos_idx, neg_idx, verbosity=0):
+    """Return for a Rule its best successor Rule according to FOIL information gain metric."""
+
     best_cond = None
     best_gain = float("-inf")
 
@@ -520,77 +527,96 @@ def best_rule_successor_cn(cn, rule, pos_idx, neg_idx, verbosity=0):
     return Rule(rule.conds + [best_cond]) if best_gain > 0 else None
 
 
-# def rule_successors_cn(cn, rule):
-#    successor_rules = []
-#    for c in cn.conds:
-#        successor_rules.append(Rule(rule.conds+[c]))
-#    return successor_rules
-
 ###################
 ##### HELPERS #####
 ###################
 
 
 def pos_neg_split(df, class_feat, pos_class):
-    """ Split df into pos and neg classes. """
+    """Split df into pos and neg classes."""
     pos_df = pos(df, class_feat, pos_class)
     neg_df = neg(df, class_feat, pos_class)
     return pos_df, neg_df
 
 
 def df_shuffled_split(df, split_size=0.66, random_state=None):
-    """ Returns tuple of shuffled and split DataFrame.
-        split_size: proportion of rows to include in tuple[0]
+    """Return tuple of shuffled and split DataFrame.
+
+    split_size : float
+        Proportion of rows to include in return[0].
+    random_state : float, default=None
+        Random seed.
+
+    Returns
+        Tuple of shuffled and split DataFrame.
     """
-    idx1, idx2 = random_split(df.index, split_size, res_type=set, random_state=random_state)
+    idx1, idx2 = random_split(
+        df.index, split_size, res_type=set, random_state=random_state
+    )
     return df.loc[idx1, :], df.loc[idx2, :]
 
 
-# Make sure seed is behaving correctly
 def set_shuffled_split(set_to_split, split_size, random_state=None):
+    """Return tuple of shuffled and split set.
+
+    split_size : float
+        Proportion of set to include in return[0].
+    random_state : float, default=None
+        Random seed.
+
+    Returns
+        Tuple of shuffled and split DataFrame.
+    """
     list_to_split = list(set_to_split)
     seed(random_state)
     shuffle(list_to_split)
     split_at = int(len(list_to_split) * split_size)
     return (set(list_to_split[:split_at]), set(list_to_split[split_at:]))
 
+
 def random_split(to_split, split_size, res_type=set, random_state=None):
+    """Return tuple of shuffled and split iterable.
+
+    to_split : iterable
+        What to shuffle and split.
+    split_size : float
+        Proportion to include in return[0].
+    res_type : type
+        Type of items to return.
+    random_state : float, default=None
+        Random seed.
+    Returns
+        Tuple of shuffled and split DataFrame.
+    """
     to_split = list(to_split)
     seed(random_state)
     shuffle(to_split)
     split_at = int(len(to_split) * split_size)
     return (res_type(to_split[:split_at]), res_type(to_split[split_at:]))
 
+
 def pos(df, class_feat, pos_class):
-    """ Returns subset of instances that are labeled positive. """
-    # """ Returns X,y subset that are labeled positive """
+    """Return subset of instances that are labeled positive."""
     return df[df[class_feat] == pos_class]
-    # return [(Xi, yi) for Xi, yi in zip(X, y) if y==pos_class]
 
 
 def neg(df, class_feat, pos_class):
-    """ Returns subset of instances that are NOT labeled positive. """
-    # """ Returns X,y subset that are NOT labeled positive """
+    """Return subset of instances that are labeled negative."""
     return df[df[class_feat] != pos_class]
-    # return [(Xi, yi) for Xi, yi in zip(X, y) if y!=pos_class]
 
 
 def num_pos(df, class_feat, pos_class):
-    """ Returns number of instances that are labeled positive. """
-    # """ Returns X,y subset that are labeled positive """
+    """Return number of instances that are labeled positive."""
     return len(df[df[class_feat] == pos_class])
-    # return len(_pos(X, y, pos_class))
 
 
 def num_neg(df, class_feat, pos_class):
-    """ Returns number of instances that are NOT labeled positive. """
-    # """ Returns X,y subset that are NOT labeled positive """
+    """ Return number of instances that are labeled negative."""
     return len(df[df[class_feat] != pos_class])
-    # return len(_neg(X, y, pos_class))
 
 
 def nCr(n, r):
-    """ Returns number of combinations C(n, r) """
+    """Return number of combinations C(n, r)."""
 
     def product(numbers):
         return reduce(op.mul, numbers, 1)
@@ -600,11 +626,11 @@ def nCr(n, r):
     return num // den
 
 
-def argmin(list_):
-    """ Returns index of minimum value. """
-    lowest_val = list_[0]
+def argmin(iterable):
+    """Return index of minimum value."""
+    lowest_val = iterable[0]
     lowest_i = 0
-    for i, val in enumerate(list_):
+    for i, val in enumerate(iterable):
         if val < lowest_val:
             lowest_val = val
             lowest_i = i
@@ -612,8 +638,12 @@ def argmin(list_):
 
 
 def i_replaced(list_, i, value):
-    """ Returns a new list with element i replaced by value.
-        Pass None to value to return list with element i removed.
+    """Return a new list with element i replaced by value.
+
+    i : value
+        Index to replace with value.
+    value : value
+        Value to replace at index i. None will return original list with element i removed.
     """
     if value is not None:
         return list_[:i] + [value] + list_[i + 1 :]
@@ -622,7 +652,22 @@ def i_replaced(list_, i, value):
 
 
 def rm_covered(object, pos_df, neg_df):
-    """ Return pos and neg dfs of examples that are not covered by object """
+    """Return pos and neg dfs of examples that are not covered by object.
+
+    Parameters
+    ----------
+    object : Cond, Rule, or Ruleset
+        Object whose coverage predictions to invoke.
+    pos_df : DataFrame
+        Positive examples.
+    neg_df : DataFrame
+        Negative examples.
+
+    Return
+    ------
+    tuple<DataFrame>
+        Positive and negative examples not covered by object.
+    """
     return (
         pos_df.drop(object.covers(pos_df).index, axis=0, inplace=False),
         neg_df.drop(object.covers(neg_df).index, axis=0, inplace=False),
@@ -630,80 +675,25 @@ def rm_covered(object, pos_df, neg_df):
 
 
 def rm_rule_covers_cn(cn, rule, pos_idx, neg_idx):
+    """Return positive and negative indices not covered by object."""
     return (
         pos_idx - cn.rule_covers(rule, pos_idx),
         neg_idx - cn.rule_covers(rule, neg_idx),
     )
 
 
-def trainset_classfeat_posclass(df, y=None, class_feat=None, pos_class=None):
-    """ Process params into trainset, class feature name, and pos class, for use in .fit methods.
-        No longer used.
-    """
-
-    if not _check_any_datasets_not_empty([df]) and not y:
-        warnings_str = "Can't train on an empty dataset!"
-        _warn(
-            warnings_str,
-            RuntimeWarning,
-            filename="base_functions",
-            funcname="grow_rule_cn",
-        )
-
-    # Ensure class feature is provided or inferable
-    if (y is None) and (class_feat is None):
-        raise ValueError("y or class_feat argument is required")
-
-    if (y is None) and (class_feat not in df.columns):
-        raise ValueError(f"Training data does not contain class feature: {class_feat}")
-
-    # Ensure no class feature name mismatch
-    if (
-        y is not None
-        and class_feat is not None
-        and hasattr(y, "name")
-        and y.name != class_feat
-    ):
-        raise ValueError(
-            f"Value mismatch between params y {y.name} and class_feat {class_feat}. Besides, you only need to provide one of them."
-        )
-
-    # Set class feature name
-    if class_feat is not None:
-        # (IOW, pass)
-        class_feat = class_feat
-    elif y is not None and hasattr(y, "name"):
-        # If y is a pandas Series, try to get its name
-        class_feat = y.name
-    else:
-        # Create a name for it
-        class_feat = "Class"
-
-    # If necessary, merge y into df
-    if y is not None:
-        df[class_feat] = y
-
-    # If provided, define positive class name. Otherwise, assign one.
-    if pos_class is not None:
-        pos_class = pos_class
-    else:
-        pos_class = df.iloc[0][class_feat]
-
-    return (df, class_feat, pos_class)
-
-
 def aslist(data):
-    if type(data) == pd.core.frame.DataFrame or type(data) == np.ndarray:
-        return data.tolist()
-    else:
+    try:
+        return data.aslist()
+    except:
         return data
 
 
 def truncstr(iterable, limit=5, direction="left"):
-    """ Return Ruleset string representation limited to a specified number of rules.
+    """Return Ruleset string representation limited to a specified number of rules.
 
-        limit: how many rules to return
-        direction: which part to return. (valid options: 'left', 'right')
+    limit: how many rules to return
+    direction: which part to return. (valid options: 'left', 'right')
     """
     if len(iterable) > limit:
         if direction == "left":
@@ -716,60 +706,8 @@ def truncstr(iterable, limit=5, direction="left"):
         return str(iterable)
 
 
-def infer_columns(df, expected_columns):
-    if df.columns.tolist() == expected_columns:
-        return expected_columns
-    problem_str = f"Did not receive expected feature names. Received {truncstr(df.columns.tolist())}. Expected {expected_columns}"
-    if len(df.columns) == len(expected_columns):
-        _warn(
-            problem_str,
-            RuntimeWarning,
-            filename="base_functions",
-            funcname="infer_columns",
-        )
-        return pd.DataFrame(df, columns=expected_columns)
-    else:
-        raise IndexError(problem_str)
-        return df.columns.tolist()
-
-    #####################
-    ##### CHECKERS ######
-    #####################
-
-
 def stop_early(ruleset, max_rules, max_total_conds):
+    """Function to decide whether to halt training."""
     return (max_rules is not None and len(ruleset.rules) >= max_rules) or (
         max_total_conds is not None and ruleset.count_conds() >= max_total_conds
     )
-
-
-##### RANDO ######
-
-
-def _check_all_model_features_in_X(df, trainset_features, model_selected_features):
-
-    df_feats = df.columns.tolist()
-    missing_feats = [f for f in model_selected_features if f not in df_feats]
-
-    # User supplied same number of features in prediction set as training set, but wrong names.
-    # Assume they are same but give stern warning
-    if missing_feats:
-        if len(trainset_features) == len(df_feats):
-            warnings_str = f"Mismatch between Ruleset training feature names and prediction feature names.\nPredicting under on the assumption that the features provided for prediction are the same as those the model was trained on, and that they are being provided in the same order.\nYou probably want to ensure 1) you include all selected features, correctly named; 2) your prediction dataset feature names are identical with your training data; or 3) use .predict param 'feature_names' to specify what prediction feature names should be.\nAssumed prediction feature names:{truncstr(df.columns.tolist())}"
-            _warn(
-                warnings_str,
-                RuntimeWarning,
-                filename="base_functions",
-                funcname="_check_all_model_features_in_X",
-            )
-            # print([type(f) for f in missing_feats])
-            # print([type(f) for f in df_feats])
-            df.columns = trainset_features
-            return df
-
-        # Didn't provide all model selected features.
-        else:
-            raise IndexError(
-                f"The features selected by Ruleset model need to be present in prediction dataset.\nMissing features: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use .predict param feature_names to specify the names of prediction dataset features.\n"
-            )
-            return

@@ -2,12 +2,14 @@
 # License: MIT
 
 import pandas as pd
+
 from .base import Cond, Rule, Ruleset
 
 
 class CatNap:
-    """ Optimized, at-times obnoxiously-dense code for speeding up pandas filtering of categorical features.
-        .covers methods return pandas indices
+    """Optimized, in-places obnoxiously-dense code, for speeding up search of categorical features.
+
+    "Covers" functions are intended to compute Cond/Rule/Ruleset coverage on dataset indices.
     """
 
     def __init__(
@@ -104,7 +106,7 @@ class CatNap:
     def pos_idx_neg_idx(
         self, df=None, class_feat=None, pos_class=None, pos_df=None, neg_df=None
     ):
-        """ Pass in df, pos_class, and class_feat or pos_df and neg_df """
+        """Pass in df, pos_class, and class_feat or pos_df and neg_df."""
         if pos_df is None and neg_df is None:
             pos_df = df[df[class_feat] == pos_class]
             neg_df = df[df[class_feat] != pos_class]

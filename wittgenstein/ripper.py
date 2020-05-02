@@ -6,18 +6,18 @@ See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
-import pandas as pd
 import copy
 import math
 import numpy as np
 
-from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset, rnd
-from .abstract_ruleset_classifier import AbstractRulesetClassifier
-from .base_functions import score_accuracy
-from .check import _check_is_model_fit
+import pandas as pd
 
+from wittgenstein import base, base_functions, preprocess
+from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .catnap import CatNap
+from .check import _check_is_model_fit
+from .base import Cond, Rule, Ruleset, rnd
+from .base_functions import score_accuracy
 
 
 class RIPPER(AbstractRulesetClassifier):
@@ -37,7 +37,7 @@ class RIPPER(AbstractRulesetClassifier):
         random_state=None,
         verbosity=0,
     ):
-        """ Creates a new RIPPER object.
+        """Create a RIPPER classifier.
 
         Parameters
         ----------
@@ -86,7 +86,7 @@ class RIPPER(AbstractRulesetClassifier):
         self.dl_allowance = dl_allowance
 
     def __str__(self):
-        """Returns string representation of a RIPPER object."""
+        """Return string representation of a RIPPER classifier."""
         params = str(self.get_params()) + ">"
         params = (
             params.replace(": ", "=")
@@ -97,7 +97,7 @@ class RIPPER(AbstractRulesetClassifier):
         return f"<RIPPER{params}"
 
     def out_model(self):
-        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
+        """Print trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
         super().out_model()
 
     def fit(
@@ -424,9 +424,7 @@ class RIPPER(AbstractRulesetClassifier):
         while len(pos_remaining) > 0 and dl_diff <= self.dl_allowance:
 
             # If applicable, check for user-specified early stopping
-            if (max_rules is not None and len(ruleset.rules) >= max_rules) or (
-                max_total_conds is not None and ruleset.count_conds() >= max_total_conds
-            ):
+            if stop_early(ruleset, max_rules, max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples
@@ -566,10 +564,16 @@ class RIPPER(AbstractRulesetClassifier):
 
             # Grow-prune split remaining uncovered examples
             pos_growset_idx, pos_pruneset_idx = base_functions.random_split(
-                pos_remaining_idx, (1 - prune_size), res_type=set, random_state=random_state
+                pos_remaining_idx,
+                (1 - prune_size),
+                res_type=set,
+                random_state=random_state,
             )
             neg_growset_idx, neg_pruneset_idx = base_functions.random_split(
-                neg_remaining_idx, (1 - prune_size), res_type=set, random_state=random_state
+                neg_remaining_idx,
+                (1 - prune_size),
+                res_type=set,
+                random_state=random_state,
             )
             if self.verbosity >= 2:
                 print(

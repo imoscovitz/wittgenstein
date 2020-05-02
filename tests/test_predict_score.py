@@ -35,14 +35,15 @@ rip.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
 
 #####
 
+
 def test_predict():
     irep_preds = irep.predict(test_x)
-    assert all(p in (True,False) for p in irep_preds)
+    assert all(p in (True, False) for p in irep_preds)
     assert not all(p == True for p in irep_preds)
     assert not all(p == False for p in irep_preds)
 
     rip_preds = rip.predict(test_x)
-    assert all(p in (True,False) for p in rip_preds)
+    assert all(p in (True, False) for p in rip_preds)
     assert not all(p == True for p in rip_preds)
     assert not all(p == False for p in rip_preds)
 
@@ -53,6 +54,7 @@ def test_predict_give_reasons():
             return pred
         else:
             return not pred
+
     irep_preds = irep.predict(test_x, give_reasons=True)
     assert all(reason_iff_pos(p, r) for p, r in zip(*irep_preds))
     rip_preds = rip.predict(test_x, give_reasons=True)
@@ -66,13 +68,31 @@ def test_predict_proba():
             return proba[1] >= proba[0]
         else:
             return proba[0] >= proba[1]
+
     irep_preds = irep.predict(test_x)
     irep_probas = irep.predict_proba(test_x)
-    assert np.mean([pred_proba_match(pred, proba) for pred, proba in zip(irep_preds, irep_probas)]) >= .95
+    assert (
+        np.mean(
+            [
+                pred_proba_match(pred, proba)
+                for pred, proba in zip(irep_preds, irep_probas)
+            ]
+        )
+        >= 0.95
+    )
     rip_preds = rip.predict(test_x)
     rip_probas = irep.predict_proba(test_x)
-    assert np.mean([pred_proba_match(pred, proba) for pred, proba in zip(rip_preds, irep_probas)]) >= .95
+    assert (
+        np.mean(
+            [
+                pred_proba_match(pred, proba)
+                for pred, proba in zip(rip_preds, irep_probas)
+            ]
+        )
+        >= 0.95
+    )
+
 
 def test_score():
-    assert irep.score(test_x, test_y) >= .75
-    assert rip.score(test_x, test_y) >= .75
+    assert irep.score(test_x, test_y) >= 0.75
+    assert rip.score(test_x, test_y) >= 0.75

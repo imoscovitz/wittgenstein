@@ -1,4 +1,6 @@
 """ Base classes for ruleset classifiers """
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
 
 import copy
 import math
@@ -10,9 +12,7 @@ from wittgenstein.check import _warn, _check_all_of_type
 
 
 class Ruleset:
-    """ Base Ruleset model.
-        Implements collection of Rules in disjunctive normal form.
-    """
+    """Collection of Rules in disjunctive normal form."""
 
     def __init__(self, rules=None):
         if rules is None:
@@ -35,10 +35,12 @@ class Ruleset:
         return len(self.rules)
 
     def truncstr(self, limit=2, direction="left"):
-        """ Return Ruleset string representation limited to a specified number of rules.
+        """Return Ruleset string representation.
 
-            limit: how many rules to return
-            direction: which part to return. (valid options: 'left', 'right')
+        limit : int, default=2
+            Maximum number of rules to include in string.
+        Direction : str, default="left"
+            Which end of ruleset to return. Valid options: 'left', 'right'.
         """
         if len(self.rules) > limit:
             if direction == "left":
@@ -53,11 +55,8 @@ class Ruleset:
     def __eq__(self, other):
         # if type(other)!=Ruleset:
         #    raise TypeError(f'{self} __eq__ {other}: a Ruleset can only be compared with another Ruleset')
-        for (
-            r
-        ) in (
-            self.rules
-        ):  # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
+        for r in self.rules:
+            # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
             if r not in other.rules:
                 return False
         for (
@@ -69,29 +68,36 @@ class Ruleset:
                 return False
         return True
 
+    def __len__(self):
+        return len(self.rules)
+
     def out_pretty(self):
-        """ Prints Ruleset line-by-line. """
+        """Print Ruleset line-by-line."""
         ruleset_str = (
             str([str(rule) for rule in self.rules])
             .replace(" ", "")
             .replace(",", " V\n")
             .replace("'", "")
+            .replace("^", " ^ ")
         )
         print(ruleset_str)
 
     def isuniversal(self):
+        """Return whether the Ruleset has an empty rule, i.e. it will always return positive predictions."""
         if len(self.rules) >= 1:
             return all(rule.isempty() for rule in self.rules)
         else:
             return False
 
     def isnull(self):
+        """Return whether the Ruleset has no rules, i.e. it will always return negative predictions."""
         return len(self.rules) == 0
 
     def copy(self, n_rules_limit=None):
-        """ Returns a deep copy of self.
+        """Return a deep copy of ruleset.
 
-            n_rules_limit (optional): keep only this many rules from the original.
+        n_rules_limit : default=None
+            Limit copy to this a subset of original rules.
         """
         result = copy.deepcopy(self)
         if n_rules_limit is not None:
@@ -99,11 +105,12 @@ class Ruleset:
         return result
 
     def covers(self, df):
-        """ Returns instances covered by the Ruleset. """
-        allpos, allneg = self._check_allpos_allneg(warn=False)
-        if allpos:
+        """Return covered examples."""
+
+        self._check_allpos_allneg(warn=False)
+        if self.isuniversal():
             return df
-        elif allneg:
+        elif self.isnull():
             return df.head(0)
         else:
             covered = self.rules[0].covers(df).copy()
@@ -113,19 +120,19 @@ class Ruleset:
             return covered
 
     def num_covered(self, df):
+        """Return the number of covered examples."""
         return len(self.covers(df))
 
     def add(self, rule):
+        """Add a rule."""
         self.rules.append(rule)
 
     def count_rules(self):
-        """ Returns number of rules in the Ruleset.
-            (For ease of use for users who don't make a habit of directly accessing the Ruleset object.)
-        """
+        """Return number of rules in the Ruleset."""
         return len(self.rules)
 
     def count_conds(self):
-        """ Returns the total number of conditions in the Ruleset. This is a measurement of complexity that's the conceptual equivalent of counting the nodes in a decision tree. """
+        """Return total number of conds in the Ruleset."""
         return sum([len(r.conds) for r in self.rules])
 
     def _set_possible_conds(self, pos_df, neg_df):
@@ -142,7 +149,7 @@ class Ruleset:
                 self.possible_conds.append(Cond(feat, val))
 
     def trim_conds(self, max_total_conds=None):
-        """ Reduce the total number of Conds in a Ruleset by removing Rules """
+        """.Reduce the total number of Conds in a Ruleset by removing Rules."""
         if max_total_conds is not None:
             while len(self.rules) > 0 and self.count_conds() > max_total_conds:
                 self.rules.pop(-1)
@@ -151,19 +158,23 @@ class Ruleset:
         return str(iterable[:max_items])[-1] + "..."
 
     def predict(self, X_df, give_reasons=False, warn=True):
-        """ Predict classes of data using a fit Ruleset model.
+        """Predict classes using a fit Ruleset.
 
-            args:
-                X_df <DataFrame>: examples to make predictions on.
+        Parameters
+        ----------
+        X_df : DataFrame
+            Examples to make predictions on.
+        give_reasons : bool, default=False
+            Whether to also return reasons for each prediction made.
 
-                give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
+        Returns
+        -------
+        list<bool>
+            Predictions. True indicates positive predicted class, False negative.
 
-            returns:
-                list of <bool> values corresponding to examples. True indicates positive predicted class; False non-positive class.
-
-                If give_reasons is True, returns a tuple that contains the above list of predictions
-                    and a list of the corresponding reasons for each prediction;
-                    for each positive prediction, gives a list of all the covering Rules, for negative predictions, an empty list.
+        If give_reasons is True, returns a tuple that contains the above list of predictions
+            and a list of the corresponding reasons for each prediction;
+            for each positive prediction, gives a list of one-or-more covering Rules, for negative predictions, an empty list.
         """
 
         # Issue warning if Ruleset is universal or empty
@@ -191,42 +202,35 @@ class Ruleset:
     def predict_proba(self, X_df, give_reasons=False):
         """ Predict probabilities for each class using a fit Ruleset model.
 
-                args:
-                    X_df <DataFrame>: examples to make predictions on.
+        Parameters
+        ----------
+        X_df : DataFrame
+            Examples to make predictions on.
+        give_reasons : bool, default=False
+            Whether to also return reasons for each prediction made.
 
-                    give_reasons (optional) <bool>: whether to provide reasons for each prediction made.
-                    min_samples (optional) <int>: return None for each example proba that lack this many samples
-                                                  set to None to ignore. (default=None)
+        Returns
+        -------
+        array<bool>
+            Predicted probabilities in order negative, positive probabilities.
+            If an example is predicted positive but none of its rules met the required number of proba training examples,
+            returns proba of 0 for both classes and issues a warning.
 
-                    give_reasons (optional) <bool>: whether to also return reasons for each prediction made.
-                    ret_n (optional) <bool>: whether to also return the number of samples used for calculating each examples proba
-
-                returns:
-                    numpy array of values corresponding to each example's classes probabilities, or, if give_reasons or ret_n, a tuple containing proba array and list(s) of desired returns
-                    a sample's class probabilities will be None if there are fewer than @param min_samples
+        If give_reasons is True, returns a tuple that contains the above list of predictions
+            and a list of the corresponding reasons for each prediction;
+            for each positive prediction, gives a list of one-or-more covering Rules, for negative predictions, an empty list.
         """
 
-        # probas for all negative predictions
+        # Get proba for all negative predictions
         uncovered_proba = weighted_avg_freqs([self.uncovered_class_freqs])
-        # uncovered_n = sum(self.uncovered_class_freqs)
 
-        # make predictions
+        # Make predictions for each example
         predictions, covering_rules = self.predict(X_df, give_reasons=True, warn=False)
-        # N = []
 
-        # collect probas
+        # Calculate probas for each example
         invalid_example_idx = []
         probas = np.empty(shape=(len(predictions), uncovered_proba.shape[0]))
         for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
-            # n = sum([sum(rule.class_freqs) for rule in cr]) # if user requests, check to ensure valid sample size
-            # if (p==True) and (n < 1 or (min_samples and n < min_samples)):
-            #    probas[i, :] = None
-            # N.append(n)
-            # elif (p==False) and (uncovered_n < 1 or uncovered_n < min_samples):
-            #    probas[i, :] = None
-            # N.append(n)
-            # elif p: # pos prediction
-
             if not p:
                 probas[i, :] = uncovered_proba
             else:
@@ -251,10 +255,8 @@ class Ruleset:
         return result
 
     def _check_allpos_allneg(self, warn=False, warnstack=""):
-        """ Return tuple<bool> representing whether a Ruleset is universal (always predicts pos), empty (always predicts neg) """
-        allpos = self.rules == [Rule()]
-        allneg = self.rules == []
-        if allpos and warn:
+        """Check if a Ruleset is universal (always predicts pos) or empty (always predicts neg) """
+        if self.isuniversal() and warn:
             warning_str = f"Ruleset is universal. All predictions it makes with method .predict will be positive. It may be untrained or was trained on a dataset split lacking negative examples."
             _warn(
                 warning_str,
@@ -263,7 +265,7 @@ class Ruleset:
                 funcname="_check_allpos_allneg",
                 warnstack=warnstack,
             )
-        elif allneg and warn:
+        elif self.isnull() and warn:
             warning_str = f"Ruleset is empty. All predictions it makes with method .predict will be negative. It may be untrained or was trained on a dataset split lacking positive examples."
             _warn(
                 warning_str,
@@ -272,9 +274,10 @@ class Ruleset:
                 funcname="_check_allpos_allneg",
                 warnstack=warnstack,
             )
-        return allpos, allneg
+        return self.isuniversal(), self.isnull()
 
     def get_selected_features(self):
+        """Return list of selected features in order they were added."""
         feature_list = []
         feature_set = set()
         for rule in self.rules:
@@ -287,13 +290,12 @@ class Ruleset:
 
 
 class Rule:
-    """ Class implementing conjunctions of Conds """
+    """Conjunction of Conds"""
 
     def __init__(self, conds=None):
         if conds is None:
             self.conds = []
         else:
-            # TODO: Could use check._check_all_of_type, but it may increase overhead
             self.conds = conds
 
     def __str__(self):
@@ -320,8 +322,6 @@ class Rule:
             )
 
     def __eq__(self, other):
-        # if type(other)!=Rule:
-        #    raise TypeError(f'{self} __eq__ {other}: a Rule can only be compared with another rule')
         if len(self.conds) != len(other.conds):
             return False
         return set([str(cond) for cond in self.conds]) == set(
@@ -331,11 +331,14 @@ class Rule:
     def __hash__(self):
         return hash(str([self.conds]))
 
+    def __len__(self):
+        return len(self.conds)
+
     def isempty(self):
         return len(self.conds) == 0
 
     def covers(self, df):
-        """ Returns instances covered by the Rule. """
+        """Return instances covered by the Rule."""
         covered = df.head(len(df))
         for cond in self.conds:
             covered = cond.covers(covered)
@@ -345,7 +348,7 @@ class Rule:
         return len(self.covers(df))
 
     def covered_feats(self):
-        """ Returns list of features covered by the Rule """
+        """Return list of features covered by the Rule."""
         return [cond.feature for cond in self.conds]
 
     #############################################
@@ -353,12 +356,16 @@ class Rule:
     #############################################
 
     def successors(self, possible_conds, pos_df, neg_df):
-        """ Returns a list of all valid successor rules.
+        """Return a list of all valid successor rules.
 
-        possible_conds: list of Conds to consider conjoining to create successors.
-                        passing None defaults to create this param from pos_df and neg_df --
-                        however, if pos_df and neg_df are data subsets, it will only generate possible_conds
-                        from their available values.
+        Parameters
+        ----------
+
+        possible_conds : list<Cond>
+        List of Conds to consider conjoining to create successors.
+        Passing None will infer possible conds from columns of pos_df and neg_df.
+        Note: If pos_df and neg_df are data subsets, it will only generate possible_conds
+        from their available values.
         """
 
         if possible_conds is not None:
@@ -380,7 +387,7 @@ class Rule:
 
 
 class Cond:
-    """ Class implementing conditional. """
+    """Conditional"""
 
     def __init__(self, feature, val):
         self.feature = feature
@@ -399,22 +406,22 @@ class Cond:
         return hash((self.feature, self.val))
 
     def covers(self, df):
-        """ Returns instances covered by the Cond (i.e. those which are not in contradiction with it). """
+        """Return instances covered by the Cond, i.e. those which are not in contradiction with it."""
         return df[df[self.feature] == self.val]
 
     def num_covered(self, df):
         return len(self.covers(df))
 
 
-######################
-######## MATH ########
-######################
+##############################
+######## MATH/HELPERS ########
+##############################
 
 
 def weighted_avg_freqs(counts):
-    """ Return weighted mean proportions of counts in the list
+    """Return weighted mean proportions of counts in the list.
 
-        counts <list<tuple>>
+    counts <list<tuple>>
     """
     arr = np.array(counts)
     total = arr.flatten().sum()
@@ -422,8 +429,7 @@ def weighted_avg_freqs(counts):
 
 
 def flagged_return(flags, objects):
-    """ Returns only objects with corresponding True flags
-        Useful when """
+    """Return only objects with corresponding True flags. Useful for functions with multiple possible return items."""
     if sum(flags) == 1:
         return objects[0]
     elif sum(flags) > 1:
@@ -432,11 +438,15 @@ def flagged_return(flags, objects):
         return ()
 
 
-def rnd(float, places="default"):
-    """ places: number of decimal places to round.
-                set to 'default': defaults to 1 decimal place if float < 100, otherwise defaults to 0 places
+def rnd(float, places=None):
+    """Round a float to decimal places.
+
+    float : float
+        Value to round.
+    places : int, default=None
+        Number of decimal places to round to. None defaults to 1 decimal place if float < 100, otherwise defaults to 0 places.
     """
-    if places == "default":
+    if places is None:
         if float < 1:
             places = 2
         elif float < 100:

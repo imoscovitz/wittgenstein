@@ -69,6 +69,7 @@ def _check_param_deprecation(kwargs, parameters):
             "fit",
         )
 
+
 def _check_model_features_present(df, model_selected_features):
 
     df_feats = df.columns.tolist()

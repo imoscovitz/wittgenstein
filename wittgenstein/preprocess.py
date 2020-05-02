@@ -3,7 +3,10 @@ import numpy as np
 import pandas as pd
 
 from wittgenstein.base_functions import truncstr, rnd
-from wittgenstein.check import _check_any_datasets_not_empty, _check_model_features_present
+from wittgenstein.check import (
+    _check_any_datasets_not_empty,
+    _check_model_features_present,
+)
 
 
 def preprocess_training_data(preprocess_params):
@@ -75,7 +78,11 @@ def preprocess_prediction_data(preprocess_params):
     )
 
     # Build new DataFrame containing both X and y.
-    df = _convert_to_prediction_df(X, class_feat=class_feat, user_requested_feature_names=user_requested_feature_names)
+    df = _convert_to_prediction_df(
+        X,
+        class_feat=class_feat,
+        user_requested_feature_names=user_requested_feature_names,
+    )
 
     # Make sure selected features are present
     _check_model_features_present(df, selected_features_)
@@ -211,9 +218,7 @@ def _check_valid_input_data(
         )
 
 
-def _convert_to_training_df(
-    X_or_Xy, y, class_feat, user_requested_feature_names=None
-):
+def _convert_to_training_df(X_or_Xy, y, class_feat, user_requested_feature_names=None):
     """Make a labeled Xy DataFrame from data."""
 
     # Create df from X_or_Xy
@@ -239,9 +244,8 @@ def _convert_to_training_df(
             df[class_feat] = y
     return df
 
-def _convert_to_prediction_df(
-    X_or_Xy, class_feat, user_requested_feature_names=None
-):
+
+def _convert_to_prediction_df(X_or_Xy, class_feat, user_requested_feature_names=None):
     """Make a labeled X DataFrame from data."""
 
     # Create df from X_or_Xy

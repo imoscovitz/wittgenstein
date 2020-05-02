@@ -42,7 +42,7 @@ class AbstractRulesetClassifier(ABC):
         self._estimator_type = "classifier"
 
     def __str__(self):
-        """Returns string representation."""
+        """Return string representation."""
         params = str(self.get_params()) + ">"
         params = (
             params.replace(": ", "=")
@@ -55,7 +55,7 @@ class AbstractRulesetClassifier(ABC):
     __repr__ = __str__
 
     def out_model(self):
-        """Prints trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
+        """Print trained Ruleset model line-by-line: V represents 'or'; ^ represents 'and'."""
         if hasattr(self, "ruleset_"):
             self.ruleset_.out_pretty()
         else:
@@ -67,7 +67,7 @@ class AbstractRulesetClassifier(ABC):
         Parameters
         ----------
         X: DataFrame, numpy array, or other iterable
-            examples to make predictions on. All selected features of the model should be present.
+            Examples to make predictions on. All selected features of the model should be present.
 
         give_reasons : bool, default=False
             Whether to provide reasons for each prediction made.
@@ -77,7 +77,7 @@ class AbstractRulesetClassifier(ABC):
         Returns
         -------
         list<bool>
-            Predicted class labels for each row of X. True indicates positive predicted class; False non-positive class.
+            Predicted class labels for each row of X. True indicates positive predicted class, False negative class.
 
         Or, if give_reasons=True, returns
 
@@ -114,8 +114,10 @@ class AbstractRulesetClassifier(ABC):
             Class label actuals.
 
         score_function : function, default=score_accuracy
-            Any scoring function that takes two parameters: actuals <iterable<bool>>, predictions <iterable<bool>>, where the elements represent class labels.
-            This optional parameter is intended to be compatible with sklearn's scoring functions: https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
+            Any scoring function that takes two parameters: actuals <iterable<bool>>,
+            predictions <iterable<bool>>, where the elements represent class labels.
+            This optional parameter is intended to be compatible with sklearn's scoring functions:
+            https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics
         """
 
         _check_is_model_fit(self)
@@ -132,21 +134,23 @@ class AbstractRulesetClassifier(ABC):
         Parameters
         ----------
             X: DataFrame, numpy array, or other iterable
-                examples to make predictions on. All selected features of the model should be present.
+                Examples to make predictions on. All selected features of the model should be present.
 
             give_reasons : bool, default=False
-                whether to provide reasons for each prediction made.
+                Whether to provide reasons for each prediction made.
             feature_names : list<str>, default=None
-                specify feature names for X to orient X's features with selected features.
+                Specify feature names for X to orient X's features with selected features.
 
         Returns
         -------
         array
-            predicted class label probabilities for each row of X, ordered neg, pos. True indicates positive predicted class; False non-positive class.
+            Predicted class label probabilities for each row of X, ordered neg, pos.
+            True indicates positive predicted class, False negative classes.
 
         or, if give_reasons=True:
+
         tuple< array, <list<list<Rule>> >
-            tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
+            Tuple containing array of predicted probabilities and a list of the corresponding reasons for each prediction--
             for each positive prediction, a list of all the covering Rules, for negative predictions, an empty list.
         """
 
@@ -182,7 +186,8 @@ class AbstractRulesetClassifier(ABC):
         discretize=True,
     ):
         """Recalibrate a classifier's probability estimations using unseen labeled data. May improve .predict_proba generalizability.
-        Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
+        Does not affect the underlying model or which predictions it makes -- only probability estimates.
+        Use params min_samples and require_min_samples to select desired behavior.
 
         Note1: RunTimeWarning will occur as a reminder when min_samples and require_min_samples params might result in unintended effects.
         Note2: It is possible recalibrating could result in some positive .predict predictions with <0.5 .predict_proba positive probability.

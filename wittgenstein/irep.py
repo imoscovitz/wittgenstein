@@ -6,18 +6,18 @@ See https://www.let.rug.nl/nerbonne/teach/learning/cohen95fast.pdf
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
-import pandas as pd
-import random
 import copy
 import numpy as np
+import random
+
+import pandas as pd
 
 from wittgenstein import base, base_functions, preprocess
-from .base import Cond, Rule, Ruleset
-from .abstract_ruleset_classifier import AbstractRulesetClassifier
-from .base_functions import score_accuracy, stop_early
-from .check import _check_param_deprecation
-
 from .catnap import CatNap
+from .check import _check_param_deprecation
+from .abstract_ruleset_classifier import AbstractRulesetClassifier
+from .base import Cond, Rule, Ruleset
+from .base_functions import score_accuracy, stop_early
 
 
 class IREP(AbstractRulesetClassifier):
@@ -33,7 +33,7 @@ class IREP(AbstractRulesetClassifier):
         random_state=None,
         verbosity=0,
     ):
-        """Creates a new IREP object.
+        """Create an IREP classifier.
 
         Parameters
         ----------
@@ -200,7 +200,10 @@ class IREP(AbstractRulesetClassifier):
         # Fit probas
         # if self.verbosity>=1: print('\ncalibrating probas for predict_proba...\n')
         self.recalibrate_proba(
-            df, min_samples=None, require_min_samples=False, discretize=False#, feature_names=feature_names
+            df,
+            min_samples=None,
+            require_min_samples=False,
+            discretize=False,  # , feature_names=feature_names
         )
 
         # Cleanup
@@ -329,10 +332,16 @@ class IREP(AbstractRulesetClassifier):
 
             # Grow-prune split remaining uncovered examples (if applicable)
             pos_growset_idx, pos_pruneset_idx = base_functions.random_split(
-                pos_remaining_idx, (1 - prune_size), res_type=set, random_state=self.random_state
+                pos_remaining_idx,
+                (1 - prune_size),
+                res_type=set,
+                random_state=self.random_state,
             )
             neg_growset_idx, neg_pruneset_idx = base_functions.random_split(
-                neg_remaining_idx, (1 - prune_size), res_type=set, random_state=self.random_state
+                neg_remaining_idx,
+                (1 - prune_size),
+                res_type=set,
+                random_state=self.random_state,
             )
 
             if self.verbosity >= 2:
