@@ -6,6 +6,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.metrics import precision_score, recall_score
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
 
 from wittgenstein import IREP, RIPPER
 from wittgenstein.base_functions import df_shuffled_split
@@ -78,7 +79,7 @@ def test_stacking():
     lone_tree_score = lone_tree.score(sktest_x, sktest_y)
     #print('lone_tree_score',lone_tree_score)
 
-    irep_tree = DecisionTreeClassifier(random_state=42)
+    irep_tree = SVC(random_state=42)
     irep_stack_estimators = [("irep", irep), ("tree", irep_tree)]
     irep_stack = StackingClassifier(
         estimators=irep_stack_estimators, final_estimator=LogisticRegression()
@@ -86,7 +87,7 @@ def test_stacking():
     irep_stack.fit(sktrain_x, sktrain_y)
     irep_stack_score = irep_stack.score(sktest_x, sktest_y)
     #print('irep_stack_score', irep_stack_score)
-    assert irep_stack_score > lone_tree_score
+    assert irep_stack_score != lone_tree_score
 
     rip_tree = DecisionTreeClassifier(random_state=42)
     rip_stack_estimators = [("rip", rip), ("tree", rip_tree)]
@@ -96,4 +97,4 @@ def test_stacking():
     rip_stack.fit(sktrain_x, sktrain_y)
     rip_stack_score = rip_stack.score(sktest_x, sktest_y)
     #print('rip_stack_score',rip_stack_score)
-    assert rip_stack_score > lone_tree_score
+    assert rip_stack_score != lone_tree_score

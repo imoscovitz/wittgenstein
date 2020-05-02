@@ -2,7 +2,10 @@ import warnings
 
 
 def _warn(message, category, filename, funcname, warnstack=[]):
-    """ warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs """
+    """Prettier version of warnings warnings.
+
+    warnstack: (optional) list of tuples of filename and function(s) calling the function where warning occurs.
+    """
     message = "\n" + message + "\n"
     filename += ".py"
     funcname = " ." + funcname
@@ -32,11 +35,6 @@ def _check_is_model_fit(model):
         raise AttributeError(
             "You should fit the ruleset classifier with .fit method before making predictions with it."
         )
-
-
-# def _get_missing_selected_features(df, model_selected_features):
-#    df_feats = df.columns.tolist()
-#    return [f for f in model_selected_features if f not in df_feats]
 
 
 # TODO: Check in fit methods before fitting
@@ -69,4 +67,13 @@ def _check_param_deprecation(kwargs, parameters):
             DeprecationWarning,
             "irep/ripper",
             "fit",
+        )
+
+def _check_model_features_present(df, model_selected_features):
+
+    df_feats = df.columns.tolist()
+    missing_feats = [f for f in model_selected_features if f not in df_feats]
+    if missing_feats:
+        raise IndexError(
+            f"The features selected by Ruleset model need to be present in prediction dataset. Dataset includes: {df_feats}.\nMissing features names: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use parameter 'feature_names' to specify the names of prediction dataset features.\n"
         )

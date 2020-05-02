@@ -1,9 +1,9 @@
 import numpy as np
-from numpy import mean, var
+
 import pandas as pd
 
-from wittgenstein.check import _check_any_datasets_not_empty
 from wittgenstein.base_functions import truncstr, rnd
+from wittgenstein.check import _check_any_datasets_not_empty, _check_model_features_present
 
 
 def preprocess_training_data(preprocess_params):
@@ -17,7 +17,7 @@ def preprocess_training_data(preprocess_params):
     n_discretize_bins = preprocess_params["n_discretize_bins"]
     verbosity = preprocess_params["verbosity"]
 
-    # STEP 0: ERROR CHECKING
+    # Error check
     _check_valid_input_data(
         trainset,
         y,
@@ -25,24 +25,24 @@ def preprocess_training_data(preprocess_params):
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 1: DETERMINE class_feat
+    # Determine class_feat
     class_feat = _get_class_feat_name(class_feat, y)
 
-    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
-    df = _convert_to_df(
+    # Build new DataFrame containing both X and y.
+    df = _convert_to_training_df(
         trainset,
         y,
         class_feat,
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 3: DEFINE pos_class
-    pos_class = get_pos_class(df, class_feat, pos_class)
+    # Define pos_class
+    pos_class = _get_pos_class(df, class_feat, pos_class)
 
-    # STEP 5: INFER FEATURE DTYPES
+    # Infer correct datatypes
     df = df.infer_objects()
 
-    # STEP 6: BIN FIT_TRANSFORM, TRANSFORM, or NOTHING
+    # Bin, if necessary
     df, bin_transformer_ = _try_bin_fit_or_fittransform_(
         df,
         n_discretize_bins=n_discretize_bins,
@@ -50,7 +50,7 @@ def preprocess_training_data(preprocess_params):
         verbosity=verbosity,
     )
 
-    # ALL DONE
+    # Done
     return df, class_feat, pos_class, bin_transformer_
 
 
@@ -65,7 +65,7 @@ def preprocess_prediction_data(preprocess_params):
     bin_transformer_ = preprocess_params["bin_transformer_"]
     verbosity = preprocess_params["verbosity"]
 
-    # STEP 0: ERROR CHECKING
+    # Error check
     _check_valid_input_data(
         X,
         y=None,
@@ -74,22 +74,16 @@ def preprocess_prediction_data(preprocess_params):
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 1: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
-    df = _convert_to_df(X, y=None, class_feat=class_feat, requires_label=False)
+    # Build new DataFrame containing both X and y.
+    df = _convert_to_prediction_df(X, class_feat=class_feat, user_requested_feature_names=user_requested_feature_names)
 
-    # STEP 2: CHECK THAT ALL MODEL FEAETURES ARE PRESENT IN X
-    # df = _get_or_set_feature_names(
-    #    df,
-    #    class_feat,
-    #    user_requested_feature_names=user_requested_feature_names,
-    #    selected_features_=selected_features_,
-    #    trainset_features_=trainset_features_,
-    # )
+    # Make sure selected features are present
+    _check_model_features_present(df, selected_features_)
 
-    # STEP 3: ASK PANDAS TO CORRECT DTYPES
+    # Infer correct datatypes
     df = df.infer_objects()
 
-    # STEP 4: BIN, IF NECESSARY
+    # Bin, if necessary
     df, _ = _try_bin_fit_or_fittransform_(
         df,
         bin_transformer_=bin_transformer_,
@@ -97,6 +91,7 @@ def preprocess_prediction_data(preprocess_params):
         verbosity=verbosity,
     )
 
+    # Done
     return df
 
 
@@ -111,7 +106,7 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
     bin_transformer_ = preprocess_params["bin_transformer_"]
     verbosity = preprocess_params["verbosity"]
 
-    # STEP 0: ERROR CHECKING
+    # Error check
     _check_valid_input_data(
         X_or_Xy,
         y,
@@ -119,23 +114,18 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 2: BUILD DataFrame from X_or_Xy (and if necessary y). Do not modify original data
-    df = _convert_to_df(
+    # Build new DataFrame containing both X and y.
+    df = _convert_to_training_df(
         X_or_Xy,
         y,
         class_feat,
         user_requested_feature_names=user_requested_feature_names,
     )
 
-    # STEP 4: GET_OR_SET FEATURE NAMES
-    # df = _get_or_set_feature_names(
-    #    df, class_feat, user_requested_feature_names=user_requested_feature_names
-    # )
-
-    # STEP 5: INFER FEATURE DTYPES
+    # Infer correct datatypes
     df = df.infer_objects()
 
-    # STEP 6: BIN FIT_TRANSFORM, TRANSFORM, or NOTHING
+    # Bin, if necessary
     df, bin_transformer_ = _try_bin_fit_or_fittransform_(
         df,
         bin_transformer_=bin_transformer_,
@@ -143,12 +133,12 @@ def _preprocess_recalibrate_proba_data(preprocess_params):
         verbosity=verbosity,
     )
 
-    # ALL DONE
+    # Done
     return df
 
 
 def _preprocess_y_score_data(y):
-    """ Return python iterable of y values """
+    """Return python iterable of y values."""
 
     def raise_wrong_ndim():
         raise IndexError(f"y input data has wrong number dimensions. It should have 1.")
@@ -221,10 +211,10 @@ def _check_valid_input_data(
         )
 
 
-def _convert_to_df(
-    X_or_Xy, y, class_feat, user_requested_feature_names=None, requires_label=True
+def _convert_to_training_df(
+    X_or_Xy, y, class_feat, user_requested_feature_names=None
 ):
-    """ Create a labeled trainset from input data. If original data was of pandas type, make deepcopy. """
+    """Make a labeled Xy DataFrame from data."""
 
     # Create df from X_or_Xy
     if isinstance(X_or_Xy, pd.DataFrame):
@@ -247,12 +237,31 @@ def _convert_to_df(
         # If that doesn't work, it's likely a python iterable
         except:
             df[class_feat] = y
+    return df
 
+def _convert_to_prediction_df(
+    X_or_Xy, class_feat, user_requested_feature_names=None
+):
+    """Make a labeled X DataFrame from data."""
+
+    # Create df from X_or_Xy
+    if isinstance(X_or_Xy, pd.DataFrame):
+        df = X_or_Xy.copy()
+    else:
+        df = pd.DataFrame(X_or_Xy)
+
+    # Drop class feature if present
+    if class_feat in df.columns:
+        df.drop(class_feat, axis=1, inplace=True)
+
+    # Set feature names
+    if user_requested_feature_names:
+        df.columns = [f for f in user_requested_feature_names if not f == class_feat]
     return df
 
 
-def get_pos_class(df, class_feat, pos_class):
-
+def _get_pos_class(df, class_feat, pos_class):
+    """Get or infer the positive class name."""
     # Pos class already known
     if pos_class is not None:
         return pos_class
@@ -291,48 +300,6 @@ def _get_class_feat_name(class_feat, y):
     return class_feat
 
 
-"""
-def _get_or_set_feature_names(
-    df,
-    class_feat,
-    user_requested_feature_names=None,
-    selected_features_=None,
-    trainset_features_=None,
-):
-    "" Assign feature names in order of these preferences:
-        1) user_requested_feature_names
-        2) fine if no missing features or no model has been trained
-        3) trainset_features_ (if they exist)
-    ""
-
-    # 1) User wants to rename features. Raise error if fail
-    if user_requested_feature_names is not None:
-
-        # Are they the same length?
-        if len(df.columns) != len(user_requested_feature_names):
-            original_feat_names = [col for col in df.columns if col != class_feat]
-            raise IndexError(
-                f"The number of requested features names ({len(user_requested_feature_names)}) does not match the number of non-class features in dataset: ({len(original_feat_names)}).\nParam feature_names: {truncstr(user_requested_feature_names,10)}\nTraining set features names: {truncstr(original_feat_names,10)}"
-            )
-        else:
-            df.columns = user_requested_feature_names
-
-    # 2) If no model trained, use input data feature names
-    if selected_features_ is None:
-        return df
-
-    # 3) If the model is trained, do we have all the features the model needs?
-    missing_feats = [feat for feat in selected_features_ if feat not in df.columns]
-    if not missing_feats:
-        return df
-
-    # 4) Some features the model needs are missing. Do we have all the features we need?
-    if missing_feats:
-        missing_feats_str = f"Some features selected by fit Ruleset model are missing: {missing_feats} from {df.columns}.\nEnsure prediction dataset includes all Ruleset-selected features. (Hint: If your dataset includes all selected features, but just under different names, you can pass .fit param 'feature names' to apply the correct names.)"
-        raise NameError(missing_feats_str)
-"""
-
-
 def _try_bin_fit_or_fittransform_(
     df, ignore_feats=[], n_discretize_bins=None, bin_transformer_=None, verbosity=0
 ):
@@ -358,13 +325,15 @@ def _try_bin_fit_or_fittransform_(
 
 
 def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
-    """ Returns df with seemingly numeric features binned, and the bin_transformer or None depending on whether binning takes places. """
+    """Return df with seemingly continuous features binned, and the bin_transformer or None depending on whether binning occurs."""
 
     if n_discretize_bins is None:
         return df, None
 
     isbinned = False
-    continuous_feats = find_continuous_feats(df, n_discretize_bins=n_discretize_bins, ignore_feats=ignore_feats)
+    continuous_feats = find_continuous_feats(
+        df, n_discretize_bins=n_discretize_bins, ignore_feats=ignore_feats
+    )
     if n_discretize_bins:
         if continuous_feats:
             if verbosity == 1:
@@ -394,7 +363,7 @@ def bin_df(df, n_discretize_bins=10, ignore_feats=[], verbosity=0):
 
 
 def find_continuous_feats(df, n_discretize_bins, ignore_feats=[]):
-    """ Returns df features that seem to be continuous. """
+    """Return names of df features that seem to be continuous."""
 
     if not n_discretize_bins:
         return []
@@ -403,7 +372,7 @@ def find_continuous_feats(df, n_discretize_bins, ignore_feats=[]):
     cont_feats = df.select_dtypes(np.number).columns
 
     # Remove discrete features
-    cont_feats = [f for f in cont_feats if len(df[f].unique())>n_discretize_bins]
+    cont_feats = [f for f in cont_feats if len(df[f].unique()) > n_discretize_bins]
 
     # Remove ignore features
     cont_feats = [f for f in cont_feats if f not in ignore_feats]
@@ -464,7 +433,7 @@ def fit_bins(df, n_bins=5, output=False, ignore_feats=[], verbosity=0):
 
         if verbosity >= 4:
             print(
-                f"-bin sizes {sizes}; dataVMR={rnd(var(df[feat])/mean(df[feat]))}, binVMR={rnd(var(sizes)/mean(sizes))}"
+                f"-bin sizes {sizes}; dataVMR={rnd(np.var(df[feat])/np.mean(df[feat]))}, binVMR={rnd(np.var(sizes)/np.mean(sizes))}"
             )  # , axis=None, dtype=None, out=None, ddof=0)})
         return bin_ranges
 
