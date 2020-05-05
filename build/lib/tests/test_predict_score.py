@@ -1,0 +1,98 @@
+import numpy as np
+import pandas as pd
+import pytest
+
+from wittgenstein import IREP, RIPPER
+from wittgenstein.base_functions import df_shuffled_split
+from wittgenstein.base import Cond, Rule
+
+DF = pd.read_csv("credit.csv")
+CLASS_FEAT = "Class"
+DEFAULT_CLASS_FEAT = "Class"
+CREDIT_POS_CLASS = "+"
+SPLIT_SIZE = 0.6
+
+X_DF = DF.drop(CLASS_FEAT, axis=1)
+Y_DF = DF[CLASS_FEAT]
+
+XY_NP = DF.values
+X_NP = X_DF.values
+Y_NP = Y_DF.values
+NP_CLASS_FEAT = -1
+
+######
+
+irep = IREP(random_state=42)
+rip = RIPPER(random_state=42)
+
+#####
+
+train, test = df_shuffled_split(DF, random_state=42)
+test_x, test_y = test.drop(CLASS_FEAT, axis=1), test[CLASS_FEAT]
+
+irep.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+rip.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+
+#####
+
+
+def test_predict():
+    irep_preds = irep.predict(test_x)
+    assert all(p in (True, False) for p in irep_preds)
+    assert not all(p == True for p in irep_preds)
+    assert not all(p == False for p in irep_preds)
+
+    rip_preds = rip.predict(test_x)
+    assert all(p in (True, False) for p in rip_preds)
+    assert not all(p == True for p in rip_preds)
+    assert not all(p == False for p in rip_preds)
+
+
+def test_predict_give_reasons():
+    def reason_iff_pos(pred, reason):
+        if list(reason) != []:
+            return pred
+        else:
+            return not pred
+
+    irep_preds = irep.predict(test_x, give_reasons=True)
+    assert all(reason_iff_pos(p, r) for p, r in zip(*irep_preds))
+    rip_preds = rip.predict(test_x, give_reasons=True)
+    assert all(reason_iff_pos(p, r) for p, r in zip(*rip_preds))
+
+
+def test_predict_proba():
+    # The vast majority of predictions and predict probas should match
+    def pred_proba_match(pred, proba):
+        if pred:
+            return proba[1] >= proba[0]
+        else:
+            return proba[0] >= proba[1]
+
+    irep_preds = irep.predict(test_x)
+    irep_probas = irep.predict_proba(test_x)
+    assert (
+        np.mean(
+            [
+                pred_proba_match(pred, proba)
+                for pred, proba in zip(irep_preds, irep_probas)
+            ]
+        )
+        >= 0.95
+    )
+    rip_preds = rip.predict(test_x)
+    rip_probas = irep.predict_proba(test_x)
+    assert (
+        np.mean(
+            [
+                pred_proba_match(pred, proba)
+                for pred, proba in zip(rip_preds, irep_probas)
+            ]
+        )
+        >= 0.95
+    )
+
+
+def test_score():
+    assert irep.score(test_x, test_y) >= 0.75
+    assert rip.score(test_x, test_y) >= 0.75
