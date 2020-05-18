@@ -1,29 +1,34 @@
 import numpy as np
 
 class BinTransformer:
-    def __init__(self, n_discretize_bins=10, prefit_bins_dict=None, names_precision=2):
+    def __init__(self, n_discretize_bins=10, names_precision=2, verbosity=0):
         self.n_discretize_bins = n_discretize_bins
         self.names_precision = names_precision
-
-        if prefit_bins_dict:
-            self.bins_ = prefit_bins_dict
-        else:
-            self.bins_ = None
+        self.verbosity = verbosity
+        self.bins_ = None
 
 
     def __str__(self):
         return str(self.bins_)
     __repr__ = __str__
 
+    def __bool__(self):
+        return not not self.bins_
+
+    def isempty(self):
+        return (
+            not self.bins_ is None
+            and not self.bins_
+        ) 
 
     def fit_or_fittransform_(
-        self, df, ignore_feats=[], verbosity=0
+        self, df, ignore_feats=[]
     ):
         """Transform df using pre-fit bins, or, if unfit, fit self and transform df"""
 
         # Binning has already been fit
         if self.bins_:
-            return self.transform(df, bin_transformer_)
+            return self.transform(df)
 
         # Binning disabled
         elif not self.n_discretize_bins:
@@ -31,25 +36,27 @@ class BinTransformer:
 
         # Binning enabled, and binner needs to be fit
         else:
-            self.fit(df, ignore_feats=ignore_feats, verbosity=verbosity)
+            self.fit(df, ignore_feats=ignore_feats)
             df, bins = self.transform(
                 df,
-                ignore_feats=ignore_feats,
-                verbosity=verbosity,
+                ignore_feats=ignore_feats
             )
-            self.bins = bin_transformer_
+            self.bins = bins
             return df
 
 
-    def fit_transform(self, df, ignore_feats=[], verbosity=0):
-        self.fit(df, ignore_feats=ignore_feats, verbosity=verbosity)
+    def fit_transform(self, df, ignore_feats=[]):
+        self.fit(df, ignore_feats=ignore_feats)
         return self.transform(df)
 
 
-    def transform(self, df, ignore_feats=[], verbosity=0):
+    def transform(self, df, ignore_feats=[]):
         """Return df with seemingly continuous features binned, and the bin_transformer or None depending on whether binning occurs."""
 
         if n_discretize_bins is None:
+            return df
+
+        if self.bins_ == {}:
             return df
 
         isbinned = False
@@ -58,16 +65,15 @@ class BinTransformer:
         )
         if self.n_discretize_bins:
             if continuous_feats:
-                if verbosity == 1:
+                if self.verbosity == 1:
                     print(f"binning data...\n")
-                elif verbosity >= 2:
+                elif self.verbosity >= 2:
                     print(f"binning features {continuous_feats}...")
                 binned_df = df.copy()
                 bin_transformer = fit_bins(
                     binned_df,
                     output=False,
                     ignore_feats=ignore_feats,
-                    verbosity=verbosity,
                 )
                 binned_df = bin_transform(binned_df, bin_transformer)
                 isbinned = True
@@ -102,7 +108,7 @@ class BinTransformer:
         return cont_feats
 
 
-    def fit(self, df, output=False, ignore_feats=[], verbosity=0):
+    def fit(self, df, output=False, ignore_feats=[]):
         """
         Returns a dict definings fits for numerical features
         A fit is an ordered list of tuples defining each bin's range (min is exclusive; max is inclusive)
@@ -113,6 +119,10 @@ class BinTransformer:
 
         def _fit_feat(df, feat):
             """Return list of tuples defining bin ranges for a numerical feature using simple linear search"""
+
+            if len(df) == 0:
+                return []
+
             n_discretize_bins = min(
                 self.n_discretize_bins, len(df[feat].unique())
             )  # In case there are fewer unique values than n_discretize_bins
@@ -121,7 +131,7 @@ class BinTransformer:
             sorted_values = sorted_df[feat].tolist()
 
             sizes = [] # for verbosity output
-            if verbosity >= 4:
+            if self.verbosity >= 4:
                 print(
                     f"{feat}: fitting {len(df[feat].unique())} unique vals into {n_discretize_bins} bins"
                 )
@@ -136,8 +146,10 @@ class BinTransformer:
             floor_val = sorted_df.iloc[0][feat] # current bin floor value
 
             prev_finish_val = None # prev bin upper bound
-            while bin_num < n_discretize_bins and floor_i < len(sorted_values):
-
+            while (
+                bin_num < n_discretize_bins
+                and floor_i < len(sorted_values)
+            ):
                 # jump to tentative ceiling index
                 ceil_i = min(floor_i + bin_size, len(sorted_df) - 1)
                 ceil_val = sorted_df.iloc[ceil_i][feat]
@@ -150,7 +162,7 @@ class BinTransformer:
                     ceil_i += 1
 
                 # found ceiling index. update values
-                if verbosity >= 4:
+                if self.verbosity >= 4:
                     sizes.append(ceil_i - floor_i)
                     print(f"bin #{bin_num}, floor idx {floor_i} value: {sorted_df.iloc[floor_i][feat]}, ceiling idx {ceil_i} value: {sorted_df.iloc[ceil_i][feat]}")
                 bin_range = (floor_val, ceil_val)
@@ -161,7 +173,11 @@ class BinTransformer:
                 floor_val = ceil_val
                 bin_num += 1
 
-            if verbosity >= 4:
+            # Guarantee min and max values
+            bin_ranges[0] = (df.iloc[0][feat], bin_ranges[0][1])
+            bin_ranges[-1] = (bin_ranges[-1][0], df.iloc[-1][feat])
+
+            if self.verbosity >= 4:
                 print(
                     f"-bin sizes {sizes}; dataVMR={rnd(np.var(df[feat])/np.mean(df[feat]))}, binVMR={rnd(np.var(sizes)/np.mean(sizes))}"
                 )  # , axis=None, dtype=None, out=None, ddof=0)})
@@ -170,9 +186,9 @@ class BinTransformer:
         # Create dict to store fit definitions for each feature
         fit_dict = {}
         feats_to_fit = self.find_continuous_feats(df, ignore_feats=ignore_feats)
-        if verbosity == 2:
+        if self.verbosity == 2:
             print(f"fitting bins for features {feats_to_fit}")
-        if verbosity >= 2:
+        if self.verbosity >= 2:
             print()
 
         # Collect fits in dict

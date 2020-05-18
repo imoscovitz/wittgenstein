@@ -4,6 +4,7 @@ import numpy as np
 from wittgenstein.check import _check_is_model_fit, _warn
 import wittgenstein.base_functions as base_functions
 import wittgenstein.preprocess as preprocess
+from wittgenstein.preprocess import _upgrade_bin_transformer_ifdepr
 
 
 class AbstractRulesetClassifier(ABC):
@@ -88,6 +89,8 @@ class AbstractRulesetClassifier(ABC):
 
         _check_is_model_fit(self)
 
+        _upgrade_bin_transformer_ifdepr(self)
+
         # Preprocess prediction data
         preprocess_params = {
             "X": X,
@@ -155,6 +158,8 @@ class AbstractRulesetClassifier(ABC):
         """
 
         _check_is_model_fit(self)
+
+        _upgrade_bin_transformer_ifdepr(self)
 
         # Preprocess prediction data
         preprocess_params = {
