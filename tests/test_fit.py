@@ -286,3 +286,13 @@ def test_fit_discrete_dataset():
     assert not (irep.ruleset_.isuniversal()) and not (irep.ruleset_.isnull())
     rip.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert not (rip.ruleset_.isuniversal()) and not (rip.ruleset_.isnull())
+
+
+def test_verbosity():
+    irep = IREP(random_state=42, verbosity=1)
+    rip = RIPPER(random_state=42, verbosity=1)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert irep.ruleset_ == IREP_RULESET_42
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert rip.ruleset_ == RIP_RULESET_42

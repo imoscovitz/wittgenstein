@@ -29,11 +29,11 @@ def test_score():
 
     irep.fit(train_x, train_y)
     assert irep.score(test_x, test_y, precision_score) > 0.5
-    assert irep.score(test_x, test_y, recall_score) > 0.5
+    assert irep.score(test_x, test_y, recall_score) > 0.2
 
     rip.fit(train_x, train_y)
     assert rip.score(test_x, test_y, precision_score) > 0.5
-    assert rip.score(test_x, test_y, recall_score) > 0.5
+    assert rip.score(test_x, test_y, recall_score) > 0.2
 
 
 def test_cv():
@@ -45,8 +45,8 @@ def test_cv():
 
 
 def test_grid_search():
-    irep = IREP(random_state=42, verbosity=1)
-    rip = RIPPER(random_state=42, verbosity=1)
+    irep = IREP(random_state=42)
+    rip = RIPPER(random_state=42)
 
     param_grid = {"prune_size": [0.33, 0.5], "max_total_conds": [3, None]}
     grid = GridSearchCV(estimator=irep, param_grid=param_grid, cv=2)

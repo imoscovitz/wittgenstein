@@ -78,7 +78,7 @@ def test_predict_proba():
                 for pred, proba in zip(irep_preds, irep_probas)
             ]
         )
-        >= 0.95
+        >= 0.90
     )
     rip_preds = rip.predict(test_x)
     rip_probas = irep.predict_proba(test_x)
@@ -89,10 +89,19 @@ def test_predict_proba():
                 for pred, proba in zip(rip_preds, irep_probas)
             ]
         )
-        >= 0.95
+        >= 0.90
     )
 
 
 def test_score():
     assert irep.score(test_x, test_y) >= 0.75
     assert rip.score(test_x, test_y) >= 0.75
+
+
+def test_verbosity():
+    irep_verbose = IREP(random_state=42, verbosity=1)
+    rip_verbose = RIPPER(random_state=42, verbosity=1)
+    irep_verbose.fit(DF, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert irep_verbose.score(test_x, test_y) == irep.score(test_x, test_y)
+    rip_verbose.fit(DF, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert rip_verbose.score(test_x, test_y) == rip.score(test_x, test_y)
