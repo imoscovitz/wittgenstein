@@ -9,10 +9,13 @@ duck-rabbit.jpg
 setup.cfg
 setup.py
 tox.ini
+dist/wittgenstein-0.2.0-py3-none-any.whl
+dist/wittgenstein-0.2.0.tar.gz
 tests/__init__.py
 tests/credit.csv
 tests/house-votes-84.csv
 tests/test_base.py
+tests/test_discretize.py
 tests/test_fit.py
 tests/test_predict_score.py
 tests/test_preprocess.py
@@ -23,6 +26,7 @@ wittgenstein/base.py
 wittgenstein/base_functions.py
 wittgenstein/catnap.py
 wittgenstein/check.py
+wittgenstein/discretize.py
 wittgenstein/irep.py
 wittgenstein/preprocess.py
 wittgenstein/ripper.py

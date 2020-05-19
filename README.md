@@ -33,7 +33,7 @@ $ pip uninstall wittgenstein
 ## Usage
 Usage syntax is similar to sklearn's.
 
-#### Training
+### Training
 
 Once you have loaded and split your data...
 ```python
@@ -102,7 +102,8 @@ Grid search:
 Ensemble:
 ```python
 >>> tree = DecisionTreeClassifier(random_state=42)
->>> estimators = [("rip", ripper_clf), ("tree", tree)]
+>>> nb = GaussianNB(random_state=42)
+>>> estimators = [("rip", ripper_clf), ("tree", tree), ("nb", nb)]
 >>> ensemble_clf = StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
 >>> ensemble_clf.fit(X_train, y_train)
 ```
@@ -154,7 +155,10 @@ Contributions are welcome! If you are interested in contributing, let me know at
 
 ## Changelog
 
-##### v0.7.0: 5/4/2020
+##### v0.2.1: 5/19/2020
+- Binning bugfix and optimization
+
+##### v0.2.0: 5/4/2020
 - Algorithmic optimizations to improve training speed (~10x - ~100x)
 - Support for training on iterable datatypes besides DataFrames, such as numpy arrays and python lists
 - Compatibility with sklearn ensembling metalearners and sklearn model_selection
