@@ -6,7 +6,6 @@ Performance Tests.ipynb
 README.md
 Usage_example.ipynb
 duck-rabbit.jpg
-setup.cfg
 setup.py
 tox.ini
 dist/wittgenstein-0.2.0-py3-none-any.whl
