@@ -48,6 +48,11 @@ RIP_RULESET_42 = Ruleset(
 FEAT2IDX = {col: i for i, col in enumerate(DF.columns)}
 
 
+CREDIT_DF = pd.read_csv("credit.csv")
+CREDIT_CLASS_FEAT = "Class"
+CREDIT_POS_CLASS = "+"
+
+
 def feat_to_num_rs(ruleset):
     new_ruleset = Ruleset()
     for rule in ruleset.rules:
@@ -289,10 +294,53 @@ def test_fit_discrete_dataset():
 
 
 def test_verbosity():
-    irep = IREP(random_state=42, verbosity=1)
-    rip = RIPPER(random_state=42, verbosity=1)
+    irep_v5 = IREP(random_state=42, verbosity=5)
+    rip_v5 = RIPPER(random_state=42, verbosity=5)
 
-    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
-    assert irep.ruleset_ == IREP_RULESET_42
-    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
-    assert rip.ruleset_ == RIP_RULESET_42
+    irep_v5.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert irep_v5.ruleset_ == IREP_RULESET_42
+    rip_v5.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert rip_v5.ruleset_ == RIP_RULESET_42
+
+
+def test_random_state():
+
+    # Party dataset
+    irep_rulesets = []
+    rip_rulesets = []
+    for _ in range(3):
+        irep = IREP(random_state=72, verbosity=1)
+        rip = RIPPER(random_state=72, verbosity=1)
+        irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+        irep_rulesets.append(irep.ruleset_)
+        rip_rulesets.append(rip.ruleset_)
+    assert all(rs == irep_rulesets[0] for rs in irep_rulesets)
+    assert all(rs == rip_rulesets[0] for rs in rip_rulesets)
+
+    # Credit dataset
+    irep_rulesets = []
+    rip_rulesets = []
+    for _ in range(3):
+        irep = IREP(random_state=72, verbosity=1)
+        rip = RIPPER(random_state=72, verbosity=1)
+        irep.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+        rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+        irep_rulesets.append(irep.ruleset_)
+        rip_rulesets.append(rip.ruleset_)
+    assert all(rs == irep_rulesets[0] for rs in irep_rulesets)
+    assert all(rs == rip_rulesets[0] for rs in rip_rulesets)
+
+
+def test_df_isnt_modified():
+    old_df = pd.read_csv("credit.csv")
+    df = old_df.copy()
+    irep = IREP(random_state=42)
+    irep.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert df.equals(old_df)
+
+    old_df = pd.read_csv("credit.csv")
+    df = old_df.copy()
+    rip = RIPPER(random_state=42)
+    rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert df.equals(old_df)

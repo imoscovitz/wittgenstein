@@ -38,14 +38,17 @@ rip.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
 
 def test_predict():
     irep_preds = irep.predict(test_x)
+
     assert all(p in (True, False) for p in irep_preds)
     assert not all(p == True for p in irep_preds)
     assert not all(p == False for p in irep_preds)
+    assert sum(irep_preds) == 128
 
     rip_preds = rip.predict(test_x)
     assert all(p in (True, False) for p in rip_preds)
     assert not all(p == True for p in rip_preds)
     assert not all(p == False for p in rip_preds)
+    assert sum(rip_preds) == 112
 
 
 def test_predict_give_reasons():
@@ -94,14 +97,15 @@ def test_predict_proba():
 
 
 def test_score():
-    assert irep.score(test_x, test_y) >= 0.75
-    assert rip.score(test_x, test_y) >= 0.75
+    assert irep.score(test_x, test_y) == pytest.approx(0.8382978723404255)
+    assert rip.score(test_x, test_y) == pytest.approx(0.8468085106382979)
 
 
 def test_verbosity():
-    irep_verbose = IREP(random_state=42, verbosity=1)
-    rip_verbose = RIPPER(random_state=42, verbosity=1)
-    irep_verbose.fit(DF, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert irep_verbose.score(test_x, test_y) == irep.score(test_x, test_y)
-    rip_verbose.fit(DF, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert rip_verbose.score(test_x, test_y) == rip.score(test_x, test_y)
+    irep_v5 = IREP(random_state=42, verbosity=5)
+    irep_v5.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert irep_v5.score(test_x, test_y) == pytest.approx(irep.score(test_x, test_y))
+
+    rip_v5 = RIPPER(random_state=42, verbosity=5)
+    rip_v5.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
+    assert rip_v5.score(test_x, test_y) == pytest.approx(rip.score(test_x, test_y))

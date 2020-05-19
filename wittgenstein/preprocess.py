@@ -2,12 +2,12 @@ import numpy as np
 
 import pandas as pd
 
-from wittgenstein.base_functions import truncstr, rnd
 from wittgenstein.check import (
     _check_any_datasets_not_empty,
     _check_model_features_present,
 )
 from wittgenstein.discretize import BinTransformer
+
 
 def preprocess_training_data(preprocess_params):
 
@@ -46,7 +46,9 @@ def preprocess_training_data(preprocess_params):
     df = df.infer_objects()
 
     # Bin, if necessary
-    bin_transformer_ = BinTransformer(n_discretize_bins=n_discretize_bins, verbosity=verbosity)
+    bin_transformer_ = BinTransformer(
+        n_discretize_bins=n_discretize_bins, verbosity=verbosity
+    )
     df = bin_transformer_.fit_transform(df, ignore_feats=[class_feat])
 
     # Done
@@ -291,9 +293,10 @@ def _get_class_feat_name(class_feat, y):
 
     return class_feat
 
+
 def _upgrade_bin_transformer_ifdepr(obj):
-    old_bin_transformer_ = getattr(obj, 'bin_transformer_')
+    old_bin_transformer_ = getattr(obj, "bin_transformer_")
     if type(old_bin_transformer_) == dict:
         new_bin_transformer_ = BinTransformer()
         new_bin_transformer_.bins_ = old_bin_transformer_
-        setattr(obj, 'bin_transformer_', new_bin_transformer_)
+        setattr(obj, "bin_transformer_", new_bin_transformer_)
