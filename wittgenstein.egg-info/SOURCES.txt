@@ -27,6 +27,7 @@ wittgenstein/base_functions.py
 wittgenstein/catnap.py
 wittgenstein/check.py
 wittgenstein/discretize.py
+wittgenstein/interpret.py
 wittgenstein/irep.py
 wittgenstein/preprocess.py
 wittgenstein/ripper.py

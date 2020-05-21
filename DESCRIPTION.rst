@@ -129,6 +129,9 @@ If you encounter any issues, or if you have feedback or improvement requests for
 
 ## Changelog
 
+##### v0.2.1: 5/19/2020
+- Binning bugfix and optimization
+
 #### v0.7.0: 5/4/2020
 - Algorithmic optimizations to improve training speed (~10x - ~100x)
 - Support for training on iterable datatypes besides DataFrames, such as numpy arrays and python lists

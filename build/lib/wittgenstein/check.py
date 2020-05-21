@@ -78,3 +78,19 @@ def _check_model_features_present(df, model_selected_features):
         raise IndexError(
             f"The features selected by Ruleset model need to be present in prediction dataset. Dataset includes: {df_feats}.\nMissing features names: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use parameter 'feature_names' to specify the names of prediction dataset features.\n"
         )
+
+
+def _warn_only_single_class(
+    only_value,
+    pos_class,
+    filename,
+    funcname
+):
+    missing_class = 'positive' if only_value != pos_class else 'negative'
+    warning_str = f"No {missing_class} samples. All target labels={only_value}."
+    _warn(
+        warning_str,
+        RuntimeWarning,
+        filename=filename,
+        funcname=funcname,
+    )

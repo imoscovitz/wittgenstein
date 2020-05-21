@@ -155,10 +155,10 @@ Contributions are welcome! If you are interested in contributing, let me know at
 
 ## Changelog
 
-##### v0.2.1: 5/19/2020
-- Binning bugfix and optimization
+#### ->v0.2.3: 5/21/2020
+- Minor bugfixes and optimizations
 
-##### v0.2.0: 5/4/2020
+#### v0.2.0: 5/4/2020
 - Algorithmic optimizations to improve training speed (~10x - ~100x)
 - Support for training on iterable datatypes besides DataFrames, such as numpy arrays and python lists
 - Compatibility with sklearn ensembling metalearners and sklearn model_selection
