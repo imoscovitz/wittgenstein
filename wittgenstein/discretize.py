@@ -7,7 +7,7 @@ class BinTransformer:
     def __init__(self, n_discretize_bins=10, names_precision=2, verbosity=0):
         self.n_discretize_bins = n_discretize_bins
         self.names_precision = names_precision
-        self.verbosity = verbosity
+        self.verbosity = verbosity 
         self.bins_ = None
 
     def __str__(self):
@@ -163,8 +163,8 @@ class BinTransformer:
                 bin_num += 1
 
             # Guarantee min and max values
-            bin_ranges[0] = (df.iloc[0][feat], bin_ranges[0][1])
-            bin_ranges[-1] = (bin_ranges[-1][0], df.iloc[-1][feat])
+            bin_ranges[0] = (sorted_df.iloc[0][feat], bin_ranges[0][1])
+            bin_ranges[-1] = (bin_ranges[-1][0], sorted_df.iloc[-1][feat])
 
             if self.verbosity >= 4:
                 print(
@@ -210,8 +210,8 @@ class BinTransformer:
         max_val, max_bin = bin_fit_list[-1][1], bin_fit_list[-1]
         for bin_fit in bin_fit_list:
             if value <= bin_fit[1]:
-                start_name = str(round(bin_fit[0], self.names_precision))
-                finish_name = str(round(bin_fit[1], self.names_precision))
+                start_name = str(round(bin_fit[0], self.names_precision)) if self.names_precision else str(int(bin_fit[0]))
+                finish_name = str(round(bin_fit[1], self.names_precision)) if self.names_precision else str(int(bin_fit[1]))
                 bin_name = "-".join([start_name, finish_name])
                 return bin_name
         if value <= min_val:
