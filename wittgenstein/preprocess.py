@@ -2,13 +2,13 @@ import numpy as np
 
 import pandas as pd
 
-from wittgenstein.base_functions import try_np_tonum
 from wittgenstein.check import (
     _check_any_datasets_not_empty,
     _check_model_features_present,
     _warn_only_single_class,
 )
 from wittgenstein.discretize import BinTransformer
+from wittgenstein import utils
 
 
 def preprocess_training_data(preprocess_params):
@@ -150,7 +150,7 @@ def _preprocess_y_score_data(y):
             raise_wrong_ndim()
 
     # Otherwise try for python iterable
-    if hasattr(y, "__iter__"): # it's an iterable
+    if hasattr(y, "__iter__"):  # it's an iterable
         # No super clean way to check for 1D, but this should be pretty decent
         if any([hasattr(item, "__iter__") and type(item) is not str for item in y]):
             raise_wrong_ndim()
@@ -270,15 +270,15 @@ def _get_pos_class(df, class_feat, pos_class):
         return pos_class
 
     # Check if pos class can be inferred as True or 1
-    unique_values = df[class_feat].unique()
+    class_values = df[class_feat].unique()
 
     # More than two classes
-    if len(unique_values) > 2:
+    if len(class_values) > 2:
         raise_fail_infer_pos_class()
 
     # Only one class
-    elif len(unique_values) == 1:
-        only_value = try_np_tonum(unique_values[0])
+    elif len(class_values) == 1:
+        only_value = utils.try_np_tonum(class_values[0])
         if only_value is 0:
             pos_class = 1
         elif only_value is False:
@@ -288,19 +288,15 @@ def _get_pos_class(df, class_feat, pos_class):
         _warn_only_single_class(
             only_value=only_value,
             pos_class=pos_class,
-            filename='preprocess.py',
-            funcname='_get_pos_class'
+            filename="preprocess.py",
+            funcname="_get_pos_class",
         )
         return pos_class
 
     # Exactly two class. Check if they are 01 or TrueFalse
     else:
-        unique_values.sort()
-        # Convert numpy int64 to native python int
-        try:
-            class_values = [try_np_tonum(val) for val in unique_values]
-        except:
-            pass
+        class_values.sort()
+        class_values = [utils.try_np_tonum(val) for val in class_values]
         if class_values[0] is 0 and class_values[1] is 1:
             return 1
         elif class_values[0] is False and class_values[1] is True:

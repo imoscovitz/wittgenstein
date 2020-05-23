@@ -9,7 +9,9 @@ import numpy as np
 from numpy import var, mean
 
 from wittgenstein.check import _warn, _check_all_of_type
-from wittgenstein.utils import _drop_chars
+from wittgenstein.utils import drop_chars
+from wittgenstein import utils
+from wittgenstein.utils import rnd, weighted_avg_freqs
 
 
 class Ruleset:
@@ -278,7 +280,7 @@ class Ruleset:
                 warning_str, RuntimeWarning, filename="base", funcname="predict_proba",
             )
         # return probas (and optional extras)
-        result = flagged_return([True, give_reasons], [probas, covering_rules])
+        result = utils.flagged_return([True, give_reasons], [probas, covering_rules])
         return result
 
     def _check_allpos_allneg(self, warn=False, warnstack=""):
@@ -451,7 +453,7 @@ def cond_fromstr(str_):
 
 
 def rule_fromstr(str_):
-    rule_str = _drop_chars(str_, "[]")
+    rule_str = drop_chars(str_, "[]")
     try:
         conds = [cond_fromstr(s) for s in rule_str.split("^")]
     except:
@@ -517,50 +519,3 @@ def asruleset(obj):
             raise TypeError(
                 f"asruleset: {obj} type {type(obj)} cannot be converted to rule. Type should be Ruleset, list of Rule, or str"
             )
-
-
-##############################
-######## MATH/HELPERS ########
-##############################
-
-
-def weighted_avg_freqs(counts):
-    """Return weighted mean proportions of counts in the list.
-
-    counts <list<tuple>>
-    """
-    arr = np.array(counts)
-    total = arr.flatten().sum()
-    return arr.sum(axis=0) / total if total else arr.sum(axis=0)
-
-
-def flagged_return(flags, objects):
-    """Return only objects with corresponding True flags. Useful for functions with multiple possible return items."""
-    if sum(flags) == 1:
-        return objects[0]
-    elif sum(flags) > 1:
-        return tuple([object for flag, object in zip(flags, objects) if flag])
-    else:
-        return ()
-
-
-def rnd(float, places=None):
-    """Round a float to decimal places.
-
-    float : float
-        Value to round.
-    places : int, default=None
-        Number of decimal places to round to. None defaults to 1 decimal place if float < 100, otherwise defaults to 0 places.
-    """
-    if places is None:
-        if float < 1:
-            places = 2
-        elif float < 100:
-            places = 1
-        else:
-            places = 0
-    rounded = round(float, places)
-    if rounded != int(rounded):
-        return rounded
-    else:
-        return int(rounded)

@@ -309,8 +309,8 @@ def test_random_state():
     irep_rulesets = []
     rip_rulesets = []
     for _ in range(3):
-        irep = IREP(random_state=72, verbosity=1)
-        rip = RIPPER(random_state=72, verbosity=1)
+        irep = IREP(random_state=72)
+        rip = RIPPER(random_state=72)
         irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
         rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
         irep_rulesets.append(irep.ruleset_)
@@ -322,8 +322,8 @@ def test_random_state():
     irep_rulesets = []
     rip_rulesets = []
     for _ in range(3):
-        irep = IREP(random_state=72, verbosity=1)
-        rip = RIPPER(random_state=72, verbosity=1)
+        irep = IREP(random_state=72)
+        rip = RIPPER(random_state=72)
         irep.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
         rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
         irep_rulesets.append(irep.ruleset_)

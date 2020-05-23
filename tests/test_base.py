@@ -12,7 +12,7 @@ from wittgenstein.base_functions import (
     set_shuffled_split,
     random_split,
 )
-from wittgenstein.base import Cond, Rule, Ruleset
+from wittgenstein.base import Cond, Rule, Ruleset, ascond, asrule, asruleset
 
 FULL_DF = pd.read_csv("house-votes-84.csv")
 FIRST_10_EXAMPLES = FULL_DF.head(10)

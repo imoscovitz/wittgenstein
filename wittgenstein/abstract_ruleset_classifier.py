@@ -241,9 +241,8 @@ class AbstractRulesetClassifier(ABC):
         else:
             self.ruleset_ = asruleset(ruleset)
 
-    # TODO
     def set_ruleset(self, new_ruleset):
-        pass
+        self.init_ruleset(new_ruleset)
 
     def edit_rule(self, index, new_rule):
         self.ruleset_.edit(index, new_rule)

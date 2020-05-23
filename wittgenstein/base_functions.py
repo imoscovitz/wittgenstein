@@ -10,8 +10,9 @@ import operator as op
 import pandas as pd
 from random import shuffle, seed
 
-from wittgenstein.base import Cond, Rule, Ruleset, rnd
+from wittgenstein.base import Cond, Rule, Ruleset
 from wittgenstein.check import _warn, _warn_only_single_class
+from wittgenstein.utils import rnd
 
 ##########################
 ##### BASE FUNCTIONS #####
@@ -367,20 +368,26 @@ def recalibrate_proba(
         ruleset.uncovered_class_freqs = tn_fn
 
     # Warn if no neg samples
-    if sum([freqs[0] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[0] == 0:
+    if (
+        sum([freqs[0] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[0]
+        == 0
+    ):
         _warn_only_single_class(
             only_value=1,
             pos_class=1,
             filename="base_functions",
-            funcname="recalibrate_proba"
+            funcname="recalibrate_proba",
         )
     # Warn if no pos samples
-    elif sum([freqs[1] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[1] == 0:
+    elif (
+        sum([freqs[1] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[1]
+        == 0
+    ):
         _warn_only_single_class(
             only_value=0,
             pos_class=1,
             filename="base_functions",
-            funcname="recalibrate_proba"
+            funcname="recalibrate_proba",
         )
 
     ###################
@@ -673,20 +680,6 @@ def rm_rule_covers_cn(cn, rule, pos_idx, neg_idx):
         pos_idx - cn.rule_covers(rule, pos_idx),
         neg_idx - cn.rule_covers(rule, neg_idx),
     )
-
-
-def aslist(data):
-    try:
-        return data.aslist()
-    except:
-        return data
-
-
-def try_np_tonum(value):
-    try:
-        return value.item()
-    except:
-        return value
 
 
 def truncstr(iterable, limit=5, direction="left"):

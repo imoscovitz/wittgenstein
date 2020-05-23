@@ -10,7 +10,12 @@ setup.py
 tox.ini
 dist/wittgenstein-0.2.0-py3-none-any.whl
 dist/wittgenstein-0.2.0.tar.gz
+dist/wittgenstein-0.2.1-py3-none-any.whl
 dist/wittgenstein-0.2.1.tar.gz
+dist/wittgenstein-0.2.2-py3-none-any.whl
+dist/wittgenstein-0.2.2.tar.gz
+dist/wittgenstein-0.2.3-py3-none-any.whl
+dist/wittgenstein-0.2.3.tar.gz
 tests/__init__.py
 tests/credit.csv
 tests/house-votes-84.csv

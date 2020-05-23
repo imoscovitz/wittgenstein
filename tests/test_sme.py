@@ -58,3 +58,11 @@ def test_edit_rule():
     irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
     irep.edit_rule(1, new_rule)
     assert irep.ruleset_.rules == [original_rules[0]] + [new_rule] + original_rules[2:]
+
+
+def set_ruleset():
+    new_ruleset = ruleset_fromstr("[[Gill-size=y] v [hello=world]")
+    irep = IREP(random_state=42)
+    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
+    irep.set_ruleset(new_ruleset)
+    assert irep.ruleset_ == new_ruleset

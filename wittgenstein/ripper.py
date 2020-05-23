@@ -16,8 +16,10 @@ from wittgenstein import base, base_functions, preprocess
 from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .catnap import CatNap
 from .check import _check_is_model_fit
-from .base import Cond, Rule, Ruleset, rnd
+from .base import Cond, Rule, Ruleset
 from .base_functions import score_accuracy
+from wittgenstein import utils
+from wittgenstein.utils import rnd
 
 
 class RIPPER(AbstractRulesetClassifier):
@@ -372,7 +374,7 @@ class RIPPER(AbstractRulesetClassifier):
         _check_is_model_fit(self)
 
         predictions = self.predict(X)
-        actuals = [yi == self.pos_class for yi in base_functions.aslist(y)]
+        actuals = [yi == self.pos_class for yi in utils.aslist(y)]
         return score_function(actuals, predictions)
 
     def _set_theory_dl_lookup(self, df, size=15, verbosity=0):

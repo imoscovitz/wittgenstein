@@ -80,17 +80,9 @@ def _check_model_features_present(df, model_selected_features):
         )
 
 
-def _warn_only_single_class(
-    only_value,
-    pos_class,
-    filename,
-    funcname
-):
-    missing_class = 'positive' if only_value != pos_class else 'negative'
+def _warn_only_single_class(only_value, pos_class, filename, funcname):
+    missing_class = "positive" if only_value != pos_class else "negative"
     warning_str = f"No {missing_class} samples. All target labels={only_value}."
     _warn(
-        warning_str,
-        RuntimeWarning,
-        filename=filename,
-        funcname=funcname,
+        warning_str, RuntimeWarning, filename=filename, funcname=funcname,
     )
