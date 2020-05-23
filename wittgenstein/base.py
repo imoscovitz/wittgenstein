@@ -9,6 +9,7 @@ import numpy as np
 from numpy import var, mean
 
 from wittgenstein.check import _warn, _check_all_of_type
+from wittgenstein.utils import _drop_chars
 
 
 class Ruleset:
@@ -19,10 +20,9 @@ class Ruleset:
             self.rules = []
         else:
             self.rules = rules
-        self.cond_count = 0
 
     def __str__(self):
-        return " V ".join([str(rule) for rule in self.rules])
+        return "[" + " V ".join([str(rule) for rule in self.rules]) + "]"
 
     def __repr__(self):
         ruleset_str = self.__str__()
@@ -123,10 +123,6 @@ class Ruleset:
         """Return the number of covered examples."""
         return len(self.covers(df))
 
-    def add(self, rule):
-        """Add a rule."""
-        self.rules.append(rule)
-
     def count_rules(self):
         """Return number of rules in the Ruleset."""
         return len(self.rules)
@@ -156,6 +152,37 @@ class Ruleset:
 
     def trimmed_str(iterable, max_items=3):
         return str(iterable[:max_items])[-1] + "..."
+
+    def add(self, rule):
+        """Add a rule."""
+        self.rules.append(rule)
+
+    def remove(self, index):
+        if index < 0 or index >= len(self):
+            raise IndexError(
+                f"remove: {index} is out of range; {self} only has {len(self)} rules"
+            )
+        del self.rules[index]
+
+    def insert(self, index, new_rule):
+        if index < 0 or index > len(self):
+            raise IndexError(
+                f"insert: {index} is out of range; {self} only has {len(self)} rules"
+            )
+        self.rules.insert(index, new_rule)
+
+    def edit(self, index, new_rule):
+        if index < 0 or index >= len(self):
+            raise IndexError(
+                f"edit: {index} is out of range; {self} only has {len(self)} rules"
+            )
+
+        if type(new_rule) == Rule:
+            self.rules[index] = new_rule
+        elif type(new_rule) == str:
+            self.rules[index] = rule_fromstr(new_rule)
+        else:
+            raise TypeError(f"edit_rule: {new_rule} must be of type Rule or str")
 
     def predict(self, X_df, give_reasons=False, warn=True):
         """Predict classes using a fit Ruleset.
@@ -411,6 +438,85 @@ class Cond:
 
     def num_covered(self, df):
         return len(self.covers(df))
+
+
+def cond_fromstr(str_):
+    antecedent_consequent = tuple(s.strip() for s in str_.split("="))
+    if len(antecedent_consequent) != 2:
+        raise ValueError(
+            f"cond_stromstr: There was a problem with parsing the string: {str_} Cond strings should take the form of 'antecedent=consequent'. Check to ensure you're using correct logical syntax."
+        )
+
+    return Cond(antecedent_consequent[0], antecedent_consequent[1])
+
+
+def rule_fromstr(str_):
+    rule_str = _drop_chars(str_, "[]")
+    try:
+        conds = [cond_fromstr(s) for s in rule_str.split("^")]
+    except:
+        raise ValueError(
+            f"rule_stromstr: There was a problem with parsing the string: '{str_}' Rule strings should take the form of '[antecedent1=consequent1 ^ antecedent2=consequent2...]' Check to ensure you're using correct logical syntax."
+        )
+    return Rule(conds)
+
+
+def ruleset_fromstr(str_):
+    rules = []
+    for rulestr in str_.split("V"):
+        try:
+            rules.append(rule_fromstr(rulestr))
+        except:
+            raise ValueError(
+                f"ruleset_stromstr: There was a problem with parsing the string: '{str_}' somewhere near the area of '{rulestr}' Ruleset strings should take the form of '[[antecedent1=consequent1] V [antecedent2=consequent2 ^ antecedent3=consequent3]...]' Check to ensure you're using correct logical syntax."
+            )
+
+    return Ruleset(rules)
+
+
+def ascond(obj):
+    if type(obj) == Cond:
+        return obj
+    elif type(obj) == str:
+        return cond_fromstr(obj)
+    elif (
+        hasattr(obj, "__iter__")
+        and len(obj) == 2
+        and all([type(item) == str for item in obj])
+    ):
+        return Cond(obj[0], obj[1])
+    else:
+        raise TypeError(
+            f"ascond: {obj} type {type(obj)} cannot be converted to cond. Type should be Cond or str"
+        )
+
+
+def asrule(obj):
+    if type(obj) == Rule:
+        return obj
+    elif type(obj) == str:
+        return rule_fromstr(obj)
+    elif hasattr(obj, "__iter__"):
+        try:
+            return Rule([ascond(item) for item in obj])
+        except:
+            raise TypeError(
+                f"asrule: {obj} type {type(obj)} cannot be converted to rule. Type should be Rule, list of Conds, or str"
+            )
+
+
+def asruleset(obj):
+    if type(obj) == Ruleset:
+        return obj
+    elif type(obj) == str:
+        return ruleset_fromstr(obj)
+    elif hasattr(obj, "__iter__"):
+        try:
+            return Ruleset([asrule(item) for item in obj])
+        except:
+            raise TypeError(
+                f"asruleset: {obj} type {type(obj)} cannot be converted to rule. Type should be Ruleset, list of Rule, or str"
+            )
 
 
 ##############################

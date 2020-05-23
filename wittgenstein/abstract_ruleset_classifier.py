@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from wittgenstein.check import _check_is_model_fit, _warn
+from wittgenstein.base import Ruleset, asruleset
 import wittgenstein.base_functions as base_functions
 import wittgenstein.preprocess as preprocess
 from wittgenstein.preprocess import _upgrade_bin_transformer_ifdepr
@@ -233,6 +234,28 @@ class AbstractRulesetClassifier(ABC):
             min_samples=min_samples,
             require_min_samples=require_min_samples,
         )
+
+    def init_ruleset(self, ruleset=None):
+        if not ruleset:
+            self.ruleset_ = Ruleset()
+        else:
+            self.ruleset_ = asruleset(ruleset)
+
+    # TODO
+    def set_ruleset(self, new_ruleset):
+        pass
+
+    def edit_rule(self, index, new_rule):
+        self.ruleset_.edit(index, new_rule)
+
+    def remove_rule(self, index):
+        self.ruleset_.remove(index)
+
+    def add_rule(self, new_rule):
+        self.ruleset_.add(new_rule)
+
+    def insert_rule(self, index, new_rule):
+        self.ruleset_.insert(index, new_rule)
 
     def get_params(self, deep=True):
         # parameter deep is a required artifact of sklearn compatability

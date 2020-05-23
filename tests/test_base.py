@@ -150,9 +150,24 @@ def test_rule_num_covered():
     assert rule_num_covered == len_assertion_df
 
 
-#### Functions
+def test_ascond():
+    assert ascond(Cond("hello", "world")) == Cond("hello", "world")
+    assert ascond(("hello", "world")) == Cond("hello", "world")
+    assert ascond(("hello=world")) == Cond("hello", "world")
 
-### Ensure random states behave consistently:
+
+def test_asrule():
+    assert asrule(Rule([Cond("hello", "world")])) == Rule([Cond("hello", "world")])
+    assert asrule(["hello=world"]) == Rule([Cond("hello", "world")])
+    assert asrule("[hello=world]") == Rule([Cond("hello", "world")])
+
+
+def test_asruleset():
+    assert asruleset(Ruleset([Rule([Cond("hello", "world")])])) == Ruleset(
+        [Rule([Cond("hello", "world")])]
+    )
+    assert asruleset("[[hello=world]]") == Ruleset([Rule([Cond("hello", "world")])])
+    assert asruleset(["[hello=world]"]) == Ruleset([Rule([Cond("hello", "world")])])
 
 
 def test_random_split_set_shuffled_split_are_same():

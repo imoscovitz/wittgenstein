@@ -91,7 +91,6 @@ class IREP(AbstractRulesetClassifier):
         cn_optimize=True,
         **kwargs,
     ):
-        # n_discretize_bins=10, max_rules=None, max_rule_conds=None, max_total_conds=None, random_state=None):
         """Fit a Ruleset model.
 
         Parameters
@@ -314,14 +313,12 @@ class IREP(AbstractRulesetClassifier):
 
         ruleset = Ruleset()
         ruleset.possible_conds = self.cn.conds
-        # ruleset._set_possible_conds(pos_df, neg_df)
 
         prune_size = (
             self.prune_size if self.prune_size is not None else 0
         )  # If not pruning, use all the data for growing
         pos_remaining_idx = set(pos_df.index.tolist())
         neg_remaining_idx = set(neg_df.index.tolist())
-        # self.rules = []
 
         # Stop adding disjunctions if there are no more positive examples to cover
         while len(pos_remaining_idx) > 0:
