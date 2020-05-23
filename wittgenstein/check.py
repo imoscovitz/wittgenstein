@@ -86,3 +86,10 @@ def _warn_only_single_class(only_value, pos_class, filename, funcname):
     _warn(
         warning_str, RuntimeWarning, filename=filename, funcname=funcname,
     )
+
+
+def _check_valid_index(index, iterable, source_func):
+    if index < 0 or index >= len(iterable):
+        raise IndexError(
+            f"{source_func}: {index} is out of range; {iterable} is of length {len(iterable)}"
+        )

@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 import pandas as pd
 
@@ -8,6 +10,8 @@ DF = pd.read_csv("mushroom.csv")
 original_ruleset_str = "[[Odor=f] V [Gill-size=n] V [Spore-print-color=r] V [Odor=m]]"
 original_ruleset = ruleset_fromstr(original_ruleset_str)
 original_rules = original_ruleset.rules
+original_irep = IREP(random_state=42)
+original_irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
 
 
 def test_initruleset():
@@ -24,45 +28,61 @@ def test_initruleset():
     irep.ruleset_ == original_ruleset
 
 
+def set_ruleset():
+    new_ruleset = ruleset_fromstr("[[Gill-size=y] v [hello=world]")
+    irep = deepcopy(original_irep)
+    irep.set_ruleset(new_ruleset)
+    assert irep.ruleset_ == new_ruleset
+
+
 def test_add_rule():
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
     new_rule = "[Spore-print-color=r^Stalk-surface-above-ring=k]"
+    irep = deepcopy(original_irep)
     irep.add_rule(new_rule)
     assert irep.ruleset_.rules == original_rules + [irep.ruleset_.rules[-1]]
 
 
 def test_remove_rule():
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-    irep.remove_rule(1)
+    # By index
+    irep = deepcopy(original_irep)
+    irep.remove_rule_at(1)
+    assert irep.ruleset_.rules == [original_rules[0]] + original_rules[2:]
+
+    # By value
+    irep = deepcopy(original_irep)
+    irep.remove_rule("[Gill-size=n]")
     assert irep.ruleset_.rules == [original_rules[0]] + original_rules[2:]
 
 
-def test_insert_rule():
+def test_insert_rule_at():
+    # By index
     new_rule = rule_fromstr("[hello=world]")
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-    irep.insert_rule(0, new_rule)
+    irep = deepcopy(original_irep)
+    irep.insert_rule_at(0, new_rule)
     assert irep.ruleset_.rules == [new_rule] + original_rules
 
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-    irep.insert_rule(2, new_rule)
+    irep = deepcopy(original_irep)
+    irep.insert_rule_at(2, new_rule)
+    assert irep.ruleset_.rules == original_rules[:2] + [new_rule] + original_rules[2:]
+
+    # By value
+    irep = deepcopy(original_irep)
+    irep.insert_rule("[Odor=f]", new_rule)
+    assert irep.ruleset_.rules == [new_rule] + original_rules
+
+    irep = deepcopy(original_irep)
+    irep.insert_rule("[Spore-print-color=r]", new_rule)
     assert irep.ruleset_.rules == original_rules[:2] + [new_rule] + original_rules[2:]
 
 
-def test_edit_rule():
+def test_replace_rule_at():
+    # By index
     new_rule = rule_fromstr("[Gill-size=y]")
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-    irep.edit_rule(1, new_rule)
+    irep = deepcopy(original_irep)
+    irep.replace_rule_at(1, new_rule)
     assert irep.ruleset_.rules == [original_rules[0]] + [new_rule] + original_rules[2:]
 
-
-def set_ruleset():
-    new_ruleset = ruleset_fromstr("[[Gill-size=y] v [hello=world]")
-    irep = IREP(random_state=42)
-    irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-    irep.set_ruleset(new_ruleset)
-    assert irep.ruleset_ == new_ruleset
+    # By value
+    irep = deepcopy(original_irep)
+    irep.replace_rule("[Gill-size=n]", new_rule)
+    assert irep.ruleset_.rules == [original_rules[0]] + [new_rule] + original_rules[2:]

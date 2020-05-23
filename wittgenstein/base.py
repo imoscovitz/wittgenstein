@@ -8,7 +8,7 @@ import math
 import numpy as np
 from numpy import var, mean
 
-from wittgenstein.check import _warn, _check_all_of_type
+from wittgenstein.check import _warn, _check_all_of_type, _check_valid_index
 from wittgenstein.utils import drop_chars
 from wittgenstein import utils
 from wittgenstein.utils import rnd, weighted_avg_freqs
@@ -160,31 +160,16 @@ class Ruleset:
         self.rules.append(rule)
 
     def remove(self, index):
-        if index < 0 or index >= len(self):
-            raise IndexError(
-                f"remove: {index} is out of range; {self} only has {len(self)} rules"
-            )
+        _check_valid_index(index, self, "remove")
         del self.rules[index]
 
     def insert(self, index, new_rule):
-        if index < 0 or index > len(self):
-            raise IndexError(
-                f"insert: {index} is out of range; {self} only has {len(self)} rules"
-            )
-        self.rules.insert(index, new_rule)
+        _check_valid_index(index, self, "insert")
+        self.rules.insert(index, asrule(new_rule))
 
-    def edit(self, index, new_rule):
-        if index < 0 or index >= len(self):
-            raise IndexError(
-                f"edit: {index} is out of range; {self} only has {len(self)} rules"
-            )
-
-        if type(new_rule) == Rule:
-            self.rules[index] = new_rule
-        elif type(new_rule) == str:
-            self.rules[index] = rule_fromstr(new_rule)
-        else:
-            raise TypeError(f"edit_rule: {new_rule} must be of type Rule or str")
+    def replace(self, index, new_rule):
+        _check_valid_index(index, self, "replace")
+        self.rules[index] = asrule(new_rule)
 
     def predict(self, X_df, give_reasons=False, warn=True):
         """Predict classes using a fit Ruleset.
@@ -453,6 +438,9 @@ def cond_fromstr(str_):
 
 
 def rule_fromstr(str_):
+    if not str or str_ == "True" or str_ == "[True]" or str_ == "[]":
+        return Rule()
+
     rule_str = drop_chars(str_, "[]")
     try:
         conds = [cond_fromstr(s) for s in rule_str.split("^")]
@@ -464,6 +452,9 @@ def rule_fromstr(str_):
 
 
 def ruleset_fromstr(str_):
+    if not str_ or str_ == "[]" or str_ == "[[]]":
+        return Ruleset()
+
     rules = []
     for rulestr in str_.split("V"):
         try:

@@ -1,8 +1,17 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+import pandas as pd
+
 from wittgenstein.check import _check_is_model_fit, _warn
-from wittgenstein.base import Ruleset, asruleset
+from wittgenstein.base import (
+    Rule,
+    Ruleset,
+    asrule,
+    asruleset,
+    cond_fromstr,
+    ruleset_fromstr,
+)
 import wittgenstein.base_functions as base_functions
 import wittgenstein.preprocess as preprocess
 from wittgenstein.preprocess import _upgrade_bin_transformer_ifdepr
@@ -244,16 +253,28 @@ class AbstractRulesetClassifier(ABC):
     def set_ruleset(self, new_ruleset):
         self.init_ruleset(new_ruleset)
 
-    def edit_rule(self, index, new_rule):
-        self.ruleset_.edit(index, new_rule)
-
-    def remove_rule(self, index):
-        self.ruleset_.remove(index)
-
     def add_rule(self, new_rule):
         self.ruleset_.add(new_rule)
 
-    def insert_rule(self, index, new_rule):
+    def replace_rule_at(self, index, new_rule):
+        self.ruleset_.replace(index, new_rule)
+
+    def remove_rule_at(self, index):
+        self.ruleset_.remove(index)
+
+    def insert_rule_at(self, index, new_rule):
+        self.ruleset_.insert(index, new_rule)
+
+    def replace_rule(self, old_rule, new_rule):
+        index = self.ruleset_.rules.index(asrule(old_rule))
+        self.ruleset_.replace(index, new_rule)
+
+    def remove_rule(self, old_rule):
+        index = self.ruleset_.rules.index(asrule(old_rule))
+        self.ruleset_.remove(index)
+
+    def insert_rule(self, insert_before_rule, new_rule):
+        index = self.ruleset_.rules.index(asrule(insert_before_rule))
         self.ruleset_.insert(index, new_rule)
 
     def get_params(self, deep=True):
@@ -279,3 +300,49 @@ class AbstractRulesetClassifier(ABC):
                 "irep/ripper",
                 "fit",
             )
+
+    def to_csv(self, filename):
+        df = self._to_df()
+        df.to_csv(filename, index=False)
+
+    def from_csv(self, filename):
+        model_df = pd.read_csv(filename)
+        self._from_df(model_df)
+
+    def to_txt(self, filename):
+        with open(filename, "w+") as f:
+            f.write(str(self.ruleset_))
+
+    def from_txt(self, filename):
+        with open(filename, "r") as f:
+            self.ruleset_ = ruleset_fromstr(f.read())
+
+    def _from_df(self, model_df):
+        rules = []
+        for _, row in model_df.iterrows():
+            rules.append(Rule([cond_fromstr(c) for c in row if isinstance(c, str)]))
+        ruleset_ = Ruleset(rules)
+
+        # TODO: How do we enter this stuff in?
+        self.class_feat, self.pos_class, self.bin_transformer_ = (
+            "Poisonous/Edible",
+            "p",
+            None,
+        )
+        self.trainset_features_ = []
+
+        self.ruleset_ = ruleset_
+        self.selected_features_ = ruleset_.get_selected_features()
+
+    def _to_df(self):
+        longest_rule_len = max([len(r) for r in self.ruleset_.rules])
+        rows = []
+        for r in self.ruleset_.rules:
+            if len(r) > longest_rule_len:
+                longest_rule_len = len(r)
+            new_row = [str(c) for c in r.conds]
+            new_row.extend([None] * (longest_rule_len - len(new_row)))
+            rows.append(new_row)
+
+        df = pd.DataFrame().from_records(data=rows)
+        return df
