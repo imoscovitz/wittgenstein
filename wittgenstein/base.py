@@ -8,7 +8,7 @@ import math
 import numpy as np
 from numpy import var, mean
 
-from wittgenstein.check import _warn, _check_all_of_type, _check_valid_index
+from wittgenstein.check import _warn, _check_all_of_type, _check_valid_index, _check_rule_exists
 from wittgenstein.utils import drop_chars
 from wittgenstein import utils
 from wittgenstein.utils import rnd, weighted_avg_freqs
@@ -55,8 +55,9 @@ class Ruleset:
             return self.__str__()
 
     def __eq__(self, other):
-        # if type(other)!=Ruleset:
-        #    raise TypeError(f'{self} __eq__ {other}: a Ruleset can only be compared with another Ruleset')
+        if type(other) != Ruleset:
+            return False
+
         for r in self.rules:
             # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
             if r not in other.rules:
@@ -133,6 +134,16 @@ class Ruleset:
         """Return total number of conds in the Ruleset."""
         return sum([len(r.conds) for r in self.rules])
 
+    def get_conds(self):
+        """Return list of all selected conds"""
+        conds_list = []
+        conds_set = set()
+        for r in self.rules:
+            new_conds = [c for c in r.conds if c not in conds_set]
+            conds_list.extend(new_conds)
+            conds_set.update(set(new_conds))
+        return conds_list
+
     def _set_possible_conds(self, pos_df, neg_df):
         """ Stores a list of all possible conds. """
 
@@ -163,13 +174,28 @@ class Ruleset:
         _check_valid_index(index, self, "remove")
         del self.rules[index]
 
+    def remove_rule(self, old_rule):
+        _check_rule_exists(asrule(old_rule), self, 'remove_rule')
+        index = self.rules.index(asrule(old_rule))
+        self.remove(index)
+
     def insert(self, index, new_rule):
         _check_valid_index(index, self, "insert")
         self.rules.insert(index, asrule(new_rule))
 
+    def insert_rule(self, insert_before_rule, new_rule):
+        _check_rule_exists(asrule(insert_before_rule), self, 'replace_rule')
+        index = self.rules.index(asrule(insert_before_rule))
+        self.insert(index, asrule(new_rule))
+
     def replace(self, index, new_rule):
         _check_valid_index(index, self, "replace")
         self.rules[index] = asrule(new_rule)
+
+    def replace_rule(self, old_rule, new_rule):
+        _check_rule_exists(asrule(old_rule), self, 'replace_rule')
+        index = self.rules.index(asrule(old_rule))
+        self.replace(index, asrule(new_rule))
 
     def predict(self, X_df, give_reasons=False, warn=True):
         """Predict classes using a fit Ruleset.
@@ -336,7 +362,9 @@ class Rule:
             )
 
     def __eq__(self, other):
-        if len(self.conds) != len(other.conds):
+        if type(other) != Rule:
+            return False
+        elif len(self.conds) != len(other.conds):
             return False
         return set([str(cond) for cond in self.conds]) == set(
             [str(cond) for cond in other.conds]
@@ -414,7 +442,10 @@ class Cond:
         return f"<Cond {self.feature}={self.val}>"
 
     def __eq__(self, other):
-        return self.feature == other.feature and self.val == other.val
+        if type(other) != Cond:
+            return False
+        else:
+            return self.feature == other.feature and self.val == other.val
 
     def __hash__(self):
         return hash((self.feature, self.val))

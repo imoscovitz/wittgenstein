@@ -12,7 +12,8 @@ original_ruleset = ruleset_fromstr(original_ruleset_str)
 original_rules = original_ruleset.rules
 original_irep = IREP(random_state=42)
 original_irep.fit(DF, class_feat="Poisonous/Edible", pos_class="p")
-
+# Ensure setup works
+assert original_ruleset == original_irep.ruleset_
 
 def test_initruleset():
     irep = IREP(random_state=42)
@@ -54,35 +55,36 @@ def test_remove_rule():
     assert irep.ruleset_.rules == [original_rules[0]] + original_rules[2:]
 
 
-def test_insert_rule_at():
+def test_insert_rule():
     # By index
-    new_rule = rule_fromstr("[hello=world]")
+    new_rule = "[hello=world]"
     irep = deepcopy(original_irep)
     irep.insert_rule_at(0, new_rule)
-    assert irep.ruleset_.rules == [new_rule] + original_rules
+    assert irep.ruleset_.rules == [rule_fromstr(new_rule)] + original_rules
 
     irep = deepcopy(original_irep)
     irep.insert_rule_at(2, new_rule)
-    assert irep.ruleset_.rules == original_rules[:2] + [new_rule] + original_rules[2:]
+    assert irep.ruleset_.rules == original_rules[:2] + [rule_fromstr(new_rule)] + original_rules[2:]
 
     # By value
     irep = deepcopy(original_irep)
     irep.insert_rule("[Odor=f]", new_rule)
-    assert irep.ruleset_.rules == [new_rule] + original_rules
+    assert irep.ruleset_.rules == [rule_fromstr(new_rule)] + original_rules
 
     irep = deepcopy(original_irep)
     irep.insert_rule("[Spore-print-color=r]", new_rule)
-    assert irep.ruleset_.rules == original_rules[:2] + [new_rule] + original_rules[2:]
+    assert irep.ruleset_.rules == original_rules[:2] + [rule_fromstr(new_rule)] + original_rules[2:]
 
 
-def test_replace_rule_at():
+def test_replace_rule():
     # By index
-    new_rule = rule_fromstr("[Gill-size=y]")
+    new_rule = "[Gill-size=y]"
+
     irep = deepcopy(original_irep)
     irep.replace_rule_at(1, new_rule)
-    assert irep.ruleset_.rules == [original_rules[0]] + [new_rule] + original_rules[2:]
+    assert irep.ruleset_.rules == [original_rules[0]] + [rule_fromstr(new_rule)] + original_rules[2:]
 
     # By value
     irep = deepcopy(original_irep)
     irep.replace_rule("[Gill-size=n]", new_rule)
-    assert irep.ruleset_.rules == [original_rules[0]] + [new_rule] + original_rules[2:]
+    assert irep.ruleset_.rules == [original_rules[0]] + [rule_fromstr(new_rule)] + original_rules[2:]

@@ -109,6 +109,7 @@ class RIPPER(AbstractRulesetClassifier):
         class_feat=None,
         pos_class=None,
         feature_names=None,
+        initial_model=None,
         cn_optimize=True,
         **kwargs,
     ):
@@ -126,6 +127,8 @@ class RIPPER(AbstractRulesetClassifier):
             Name of positive class.
         feature_names : list<str>, optional, default=None
             Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
+        initial_model : Ruleset or str, default=None
+            Continue training from a preexisting model.
         cn_optimize : bool, default=True
             Use algorithmic speed optimization.
 
@@ -211,7 +214,8 @@ class RIPPER(AbstractRulesetClassifier):
         # Stage 1: Grow initial Ruleset
         ###############################
 
-        self.ruleset_ = Ruleset()
+        #self.set_ruleset(asrulese(initial_model))
+        #if not initial_model: self.ruleset_ = Ruleset()
         if cn_optimize:
             pos_idx = set(pos_df.index.tolist())
             neg_idx = set(neg_df.index.tolist())

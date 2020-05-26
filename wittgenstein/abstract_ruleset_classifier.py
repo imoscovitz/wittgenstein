@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 import numpy as np
 
 import pandas as pd
@@ -244,11 +245,15 @@ class AbstractRulesetClassifier(ABC):
             require_min_samples=require_min_samples,
         )
 
+    def copy(self):
+        """Return deep copy of classifier."""
+        return deepcopy(self)
+
     def init_ruleset(self, ruleset=None):
         if not ruleset:
             self.ruleset_ = Ruleset()
         else:
-            self.ruleset_ = asruleset(ruleset)
+            self.ruleset_ = asruleset(deepcopy(ruleset))
 
     def set_ruleset(self, new_ruleset):
         self.init_ruleset(new_ruleset)
@@ -259,23 +264,20 @@ class AbstractRulesetClassifier(ABC):
     def replace_rule_at(self, index, new_rule):
         self.ruleset_.replace(index, new_rule)
 
+    def replace_rule(self, old_rule, new_rule):
+        self.ruleset_.replace_rule(old_rule, new_rule)
+
     def remove_rule_at(self, index):
         self.ruleset_.remove(index)
+
+    def remove_rule(self, old_rule):
+        self.ruleset_.remove_rule(old_rule)
 
     def insert_rule_at(self, index, new_rule):
         self.ruleset_.insert(index, new_rule)
 
-    def replace_rule(self, old_rule, new_rule):
-        index = self.ruleset_.rules.index(asrule(old_rule))
-        self.ruleset_.replace(index, new_rule)
-
-    def remove_rule(self, old_rule):
-        index = self.ruleset_.rules.index(asrule(old_rule))
-        self.ruleset_.remove(index)
-
     def insert_rule(self, insert_before_rule, new_rule):
-        index = self.ruleset_.rules.index(asrule(insert_before_rule))
-        self.ruleset_.insert(index, new_rule)
+        self.ruleset_.insert_rule(insert_before_rule, new_rule)
 
     def get_params(self, deep=True):
         # parameter deep is a required artifact of sklearn compatability
@@ -330,7 +332,6 @@ class AbstractRulesetClassifier(ABC):
             None,
         )
         self.trainset_features_ = []
-
         self.ruleset_ = ruleset_
         self.selected_features_ = ruleset_.get_selected_features()
 

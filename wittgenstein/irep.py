@@ -88,6 +88,7 @@ class IREP(AbstractRulesetClassifier):
         class_feat=None,
         pos_class=None,
         feature_names=None,
+        initial_model=None,
         cn_optimize=True,
         **kwargs,
     ):
@@ -105,6 +106,8 @@ class IREP(AbstractRulesetClassifier):
             Name of positive class.
         feature_names : list<str>, optional, default=None
             Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
+        initial_model : Ruleset or str, default=None
+            Continue training from a preexisting model.
         cn_optimize : bool, default=True
             Use algorithmic speed optimization.
 
@@ -179,6 +182,8 @@ class IREP(AbstractRulesetClassifier):
         # Stage 1 (of 1): Grow Ruleset
         if self.verbosity >= 1:
             print("\nbuilding Ruleset...")
+        #self.set_ruleset(asrulese(initial_model))
+        #if not initial_model: self.ruleset_ = Ruleset()
         self.ruleset_ = Ruleset()
         if not cn_optimize:
             self.ruleset_ = self._grow_ruleset(pos_df, neg_df)

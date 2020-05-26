@@ -93,3 +93,11 @@ def _check_valid_index(index, iterable, source_func):
         raise IndexError(
             f"{source_func}: {index} is out of range; {iterable} is of length {len(iterable)}"
         )
+
+def _check_rule_exists(rule, ruleset, source_func):
+    for r in ruleset:
+        if r == rule:
+            return
+    raise ValueError(
+        f"{source_func}: couldn't find Rule named '{rule}' in Ruleset: '{ruleset}'"
+    )

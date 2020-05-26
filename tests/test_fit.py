@@ -333,6 +333,7 @@ def test_random_state():
 
 
 def test_df_isnt_modified():
+    # df shouldn't be affected by side-effects during model fitting
     old_df = pd.read_csv("credit.csv")
     df = old_df.copy()
     irep = IREP(random_state=42)
@@ -344,3 +345,7 @@ def test_df_isnt_modified():
     rip = RIPPER(random_state=42)
     rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert df.equals(old_df)
+
+def test_model_seed():
+    # STUB
+    assert 0 == 1
