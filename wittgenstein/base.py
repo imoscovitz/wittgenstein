@@ -8,7 +8,12 @@ import math
 import numpy as np
 from numpy import var, mean
 
-from wittgenstein.check import _warn, _check_all_of_type, _check_valid_index, _check_rule_exists
+from wittgenstein.check import (
+    _warn,
+    _check_all_of_type,
+    _check_valid_index,
+    _check_rule_exists,
+)
 from wittgenstein.utils import drop_chars
 from wittgenstein import utils
 from wittgenstein.utils import rnd, weighted_avg_freqs
@@ -168,14 +173,14 @@ class Ruleset:
 
     def add(self, rule):
         """Add a rule."""
-        self.rules.append(rule)
+        self.rules.append(asrule(rule))
 
     def remove(self, index):
         _check_valid_index(index, self, "remove")
         del self.rules[index]
 
     def remove_rule(self, old_rule):
-        _check_rule_exists(asrule(old_rule), self, 'remove_rule')
+        _check_rule_exists(asrule(old_rule), self, "remove_rule")
         index = self.rules.index(asrule(old_rule))
         self.remove(index)
 
@@ -184,7 +189,7 @@ class Ruleset:
         self.rules.insert(index, asrule(new_rule))
 
     def insert_rule(self, insert_before_rule, new_rule):
-        _check_rule_exists(asrule(insert_before_rule), self, 'replace_rule')
+        _check_rule_exists(asrule(insert_before_rule), self, "replace_rule")
         index = self.rules.index(asrule(insert_before_rule))
         self.insert(index, asrule(new_rule))
 
@@ -193,7 +198,7 @@ class Ruleset:
         self.rules[index] = asrule(new_rule)
 
     def replace_rule(self, old_rule, new_rule):
-        _check_rule_exists(asrule(old_rule), self, 'replace_rule')
+        _check_rule_exists(asrule(old_rule), self, "replace_rule")
         index = self.rules.index(asrule(old_rule))
         self.replace(index, asrule(new_rule))
 

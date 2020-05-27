@@ -397,10 +397,10 @@ def recalibrate_proba(
 
 def gain(before, after, pos_df, neg_df):
     """Calculates the information gain from before to after."""
-    p0count = before.num_covered(pos_df)
-    p1count = after.num_covered(pos_df)
-    n0count = before.num_covered(neg_df)
-    n1count = after.num_covered(neg_df)
+    p0count = before.num_covered(pos_df) # tp
+    p1count = after.num_covered(pos_df) # tp after action step
+    n0count = before.num_covered(neg_df) # fn
+    n1count = after.num_covered(neg_df) # fn after action step
     return p1count * (
         math.log2((p1count + 1) / (p1count + n1count + 1))
         - math.log2((p0count + 1) / (p0count + n0count + 1))
@@ -409,10 +409,10 @@ def gain(before, after, pos_df, neg_df):
 
 def gain_cn(cn, cond_step, rule_covers_pos_idx, rule_covers_neg_idx):
     """Calculates the information gain from adding a Cond."""
-    p0count = len(rule_covers_pos_idx)
-    p1count = len(cn.cond_covers(cond_step, subset=rule_covers_pos_idx))
-    n0count = len(rule_covers_neg_idx)
-    n1count = len(cn.cond_covers(cond_step, subset=rule_covers_neg_idx))
+    p0count = len(rule_covers_pos_idx) # tp
+    p1count = len(cn.cond_covers(cond_step, subset=rule_covers_pos_idx)) # tp after action step
+    n0count = len(rule_covers_neg_idx) # fn
+    n1count = len(cn.cond_covers(cond_step, subset=rule_covers_neg_idx)) # fn after action step
     return p1count * (
         math.log2((p1count + 1) / (p1count + n1count + 1))
         - math.log2((p0count + 1) / (p0count + n0count + 1))

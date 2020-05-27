@@ -1,3 +1,6 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
 import warnings
 
 
@@ -93,6 +96,7 @@ def _check_valid_index(index, iterable, source_func):
         raise IndexError(
             f"{source_func}: {index} is out of range; {iterable} is of length {len(iterable)}"
         )
+
 
 def _check_rule_exists(rule, ruleset, source_func):
     for r in ruleset:

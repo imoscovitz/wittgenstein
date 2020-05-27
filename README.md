@@ -138,6 +138,24 @@ We can also ask our model to tell us why it made each positive prediction using 
 [])
 ```
 
+### Altering models
+Sometimes you may wish to specify or modify a model (for instance, to take into account subject matter expertise, to create a baseline for scoring, to make predictions based on your own intuitions -- or perhaps out of curiosity to see how it does).
+
+To specify your own model, use `init_ruleset`:
+```python
+>>> ripper_clf.init_ruleset('[[physician-fee-freeze=n] V [anti-satellite-test-ban=n^physician-fee-freeze=y]]')
+```
+
+To modify a trained model, use `add_rule`, `replace_rule`, `remove_rule`, or `insert_rule`. To alter a model by index, use `replace_rule_at`, etc.
+```python
+>>> ripper_clf.replace_rule_at(1, '[anti-satellite-test-ban=n]')
+>>> ripper_clf.insert_rule(insert_before_rule='[physician-fee-freeze=n]', new_rule='[endorse-compulsory-piracy=y]')
+>>> ripper_clf.out_model()
+[[endorse-compulsory-piracy=y] V
+[physician-fee-freeze=n] V
+[anti-satellite-test-ban=n]]
+```
+
 ## Issues
 If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
 
@@ -155,7 +173,7 @@ Contributions are welcome! If you are interested in contributing, let me know at
 
 ## Changelog
 
-#### ->v0.2.3: 5/21/2020
+#### v0.2.3: 5/21/2020
 - Minor bugfixes and optimizations
 
 #### v0.2.0: 5/4/2020

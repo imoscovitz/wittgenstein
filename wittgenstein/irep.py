@@ -12,11 +12,11 @@ import random
 
 import pandas as pd
 
-from wittgenstein import base, base_functions, preprocess
+from wittgenstein import utils, base, base_functions, preprocess
 from .catnap import CatNap
 from .check import _check_param_deprecation
 from .abstract_ruleset_classifier import AbstractRulesetClassifier
-from .base import Cond, Rule, Ruleset
+from .base import Cond, Rule, Ruleset, asruleset
 from .base_functions import score_accuracy, stop_early
 
 
@@ -106,8 +106,8 @@ class IREP(AbstractRulesetClassifier):
             Name of positive class.
         feature_names : list<str>, optional, default=None
             Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
-        initial_model : Ruleset or str, default=None
-            Continue training from a preexisting model.
+        initial_model : Ruleset, str, IREP or RIPPER, default=None
+            Preexisting model from which to begin training. See also 'init_ruleset'.
         cn_optimize : bool, default=True
             Use algorithmic speed optimization.
 
@@ -139,7 +139,7 @@ class IREP(AbstractRulesetClassifier):
                5: Show Rule grow/prune calculations
         """
 
-        # Stage 0: Setup
+        # SETUP
 
         # Handle any hyperparam deprecation
         self._set_deprecated_fit_params(kwargs)
@@ -179,16 +179,14 @@ class IREP(AbstractRulesetClassifier):
         pos_df = pos_df.drop(self.class_feat, axis=1)
         neg_df = neg_df.drop(self.class_feat, axis=1)
 
-        # Stage 1 (of 1): Grow Ruleset
+        # TRAINING
         if self.verbosity >= 1:
             print("\nbuilding Ruleset...")
-        #self.set_ruleset(asrulese(initial_model))
-        #if not initial_model: self.ruleset_ = Ruleset()
-        self.ruleset_ = Ruleset()
+        initial_model = Ruleset() if not initial_model else asruleset(initial_model)
         if not cn_optimize:
-            self.ruleset_ = self._grow_ruleset(pos_df, neg_df)
+            self.ruleset_ = self._grow_ruleset(pos_df, neg_df, initial_model=initial_model)
         else:
-            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df)
+            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df, initial_model=initial_model)
 
         if self.verbosity >= 1:
             print("\nGREW RULESET:")
@@ -201,26 +199,33 @@ class IREP(AbstractRulesetClassifier):
         self.selected_features_ = self.ruleset_.get_selected_features()
         self.trainset_features_ = df.drop(self.class_feat, axis=1).columns.tolist()
 
-        # Fit probas
-        # if self.verbosity>=1: print('\ncalibrating probas for predict_proba...\n')
+        # FIT PROBAS
         self.recalibrate_proba(
             df,
             min_samples=None,
             require_min_samples=False,
-            discretize=False,  # , feature_names=feature_names
+            discretize=False,
         )
 
-        # Cleanup
-        if cn_optimize:
-            del self.cn
-
+        # CLEANUP
         self.classes_ = np.array([0, 1])
 
-    def _grow_ruleset(self, pos_df, neg_df):
+        # Remove any duplicates and trim
+        self.ruleset_.rules = utils.remove_duplicates(self.ruleset_.rules)
+        self.ruleset_.trim_conds(max_total_conds=self.max_total_conds)
+        if cn_optimize:
+            del(self.cn)
+
+    def _grow_ruleset(self, pos_df, neg_df, initial_model=None):
         """Grow a Ruleset with (optional) pruning."""
 
-        ruleset = Ruleset()
+        ruleset = self._ruleset_frommodel(initial_model)
         ruleset._set_possible_conds(pos_df, neg_df)
+
+        if self.verbosity >= 2:
+            print("growing ruleset...")
+            print(f"initial model: {ruleset}")
+            print()
 
         prune_size = (
             self.prune_size if self.prune_size is not None else 0
@@ -307,17 +312,19 @@ class IREP(AbstractRulesetClassifier):
                         )
                         print()
 
-        # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=self.max_total_conds)
-
         # Return new ruleset
         return ruleset
 
-    def _grow_ruleset_cn(self, pos_df, neg_df):
+    def _grow_ruleset_cn(self, pos_df, neg_df, initial_model=None):
         """Grow a Ruleset with (optional) pruning."""
 
-        ruleset = Ruleset()
+        ruleset = self._ruleset_frommodel(initial_model)
         ruleset.possible_conds = self.cn.conds
+
+        if self.verbosity >= 2:
+            print("growing ruleset...")
+            print(f"initial model: {ruleset}")
+            print()
 
         prune_size = (
             self.prune_size if self.prune_size is not None else 0
@@ -416,9 +423,6 @@ class IREP(AbstractRulesetClassifier):
                             f"examples remaining: {len(pos_remaining_idx)} pos, {len(neg_remaining_idx)} neg"
                         )
                         print()
-
-        # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=self.max_total_conds)
 
         # Return new ruleset
         return ruleset

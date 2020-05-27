@@ -1,3 +1,7 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
+from copy import deepcopy
 import numpy as np
 
 
@@ -5,6 +9,19 @@ def drop_chars(str_, chars):
     res = str_
     for char in chars:
         res = res.replace(char, "")
+    return res
+
+
+def remove_duplicates(list_):
+    res = deepcopy(list_)
+    encountered = set()
+    i = 0
+    while i < len(res):
+        if res[i] in encountered:
+            del(res[i])
+        else:
+            encountered.add(res[i])
+            i += 1
     return res
 
 

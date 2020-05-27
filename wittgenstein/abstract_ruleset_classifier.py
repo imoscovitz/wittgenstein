@@ -1,3 +1,6 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import numpy as np
@@ -15,7 +18,7 @@ from wittgenstein.base import (
 )
 import wittgenstein.base_functions as base_functions
 import wittgenstein.preprocess as preprocess
-from wittgenstein.preprocess import _upgrade_bin_transformer_ifdepr
+from wittgenstein.preprocess import BinTransformer, _upgrade_bin_transformer_ifdepr
 
 
 class AbstractRulesetClassifier(ABC):
@@ -288,6 +291,19 @@ class AbstractRulesetClassifier(ABC):
             setattr(self, parameter, value)
         return self
 
+    def _ruleset_frommodel(self, model):
+        """Return the ruleset from model, which may be a Ruleset, wittgenstein classifier, or str."""
+        if not model:
+            return Ruleset()
+        elif type(model) == Ruleset:
+            return deepcopy(model)
+        elif type(model) == str:
+            return deepcopy(asruleset(model))
+        elif isinstance(model, AbstractRulesetClassifier):
+            return deepcopy(model.ruleset_)
+        else:
+            raise AttributeError(f"Couldnt recognize type: {type(model)} of model: {model}. Model should be of type Ruleset, str defining a ruleset, or wittgenstein classifier.")
+
     def _set_deprecated_fit_params(self, params):
         """Handle setting parameters passed to .fit that should have been passed to __init__"""
         found_deprecated_params = []
@@ -304,38 +320,38 @@ class AbstractRulesetClassifier(ABC):
             )
 
     def to_csv(self, filename):
-        df = self._to_df()
+        df = self._ruleset_to_df()
         df.to_csv(filename, index=False)
 
-    def from_csv(self, filename):
+    def from_csv(self, filename, class_feat, pos_class):
         model_df = pd.read_csv(filename)
-        self._from_df(model_df)
+        self.ruleset_ = self._ruleset_from_df(model_df)
+        self._from_ruleset(self.ruleset_, class_feat, pos_class)
 
     def to_txt(self, filename):
         with open(filename, "w+") as f:
             f.write(str(self.ruleset_))
 
-    def from_txt(self, filename):
+    def from_txt(self, filename, class_feat, pos_class):
         with open(filename, "r") as f:
             self.ruleset_ = ruleset_fromstr(f.read())
+        self._from_ruleset(self.ruleset_, class_feat, pos_class)
 
-    def _from_df(self, model_df):
+    def _from_ruleset(self, ruleset, class_feat, pos_class):
+        self.ruleset_ = ruleset
+        self.trainset_features_ = self.ruleset_.get_selected_features()
+        self.selected_features_ = self.ruleset_.get_selected_features()
+        self.bin_transformer_ = BinTransformer()._construct_from_ruleset(self.ruleset_)
+        self.class_feat = class_feat
+        self.pos_class = pos_class
+
+    def _ruleset_from_df(self, model_df):
         rules = []
         for _, row in model_df.iterrows():
             rules.append(Rule([cond_fromstr(c) for c in row if isinstance(c, str)]))
-        ruleset_ = Ruleset(rules)
+        return Ruleset(rules)
 
-        # TODO: How do we enter this stuff in?
-        self.class_feat, self.pos_class, self.bin_transformer_ = (
-            "Poisonous/Edible",
-            "p",
-            None,
-        )
-        self.trainset_features_ = []
-        self.ruleset_ = ruleset_
-        self.selected_features_ = ruleset_.get_selected_features()
-
-    def _to_df(self):
+    def _ruleset_to_df(self):
         longest_rule_len = max([len(r) for r in self.ruleset_.rules])
         rows = []
         for r in self.ruleset_.rules:

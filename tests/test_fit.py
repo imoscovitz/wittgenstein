@@ -346,6 +346,7 @@ def test_df_isnt_modified():
     rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert df.equals(old_df)
 
+
 def test_model_seed():
     # STUB
     assert 0 == 1

@@ -1,3 +1,7 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
+from collections import defaultdict
 import numpy as np
 
 from wittgenstein.base_functions import truncstr
@@ -243,3 +247,67 @@ class BinTransformer:
         # Wrong number of feature names
         else:
             return None
+
+    def _construct_from_ruleset(self, ruleset):
+        MIN_N_DISCRETIZED_BINS = 10
+
+        bt = BinTransformer()
+        bt.bins_ = self._bin_prediscretized_features(ruleset)
+        bt.n_discretize_bins = max(
+            (MIN_N_DISCRETIZED_BINS, max(len(bins) for bins in bt.bins_.values()))
+        )
+        bt.names_precision = self._max_dec_precision(bt.bins_)
+        return bt
+
+    def _bin_prediscretized_features(self, ruleset):
+        def is_valid_decimal(s):
+            try:
+                float(s)
+            except:
+                return False
+            return True
+
+        def find_floor_ceil(value):
+            """id min, max separated by a dash. Return None if invalid pattern."""
+            split_idx = 0
+            for i, char in enumerate(value):
+                # Found a possible split and it's not the first number's minus sign
+                if char == "-" and i != 0:
+                    if split_idx is not None and not split_idx:
+                        split_idx = i
+                    # Found a - after the split, and it's not the minus of a negative number
+                    elif i > split_idx + 1:
+                        return None
+
+            floor = value[:split_idx]
+            ceil = value[split_idx + 1 :]
+            if is_valid_decimal(floor) and is_valid_decimal(ceil):
+                return (floor, ceil)
+            else:
+                return None
+
+        # Main function: _bin_prediscretized_features
+        discrete = defaultdict(list)
+        for cond in ruleset.get_conds():
+            floor_ceil = find_floor_ceil(cond.val)
+            if floor_ceil:
+                discrete[cond.feature].append(floor_ceil)
+        for feat, ranges in discrete.items():
+            ranges.sort(key=lambda x: float(x[0]))
+        return dict(discrete)
+
+    def _max_dec_precision(self, bins_dict):
+        def dec_precision(value):
+            try:
+                return len(value) - value.index(".") - 1
+            except:
+                return 0
+
+        max_prec = 0
+        for bins in bins_dict.values():
+            for bin_ in bins:
+                for value in bin_:
+                    cur_prec = dec_precision(value)
+                    if cur_prec > max_prec:
+                        max_prec = cur_prec
+        return max_prec

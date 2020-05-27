@@ -1,3 +1,6 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
 import numpy as np
 
 import pandas as pd

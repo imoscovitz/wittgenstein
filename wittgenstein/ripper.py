@@ -14,10 +14,10 @@ import pandas as pd
 
 from wittgenstein import base, base_functions, preprocess
 from .abstract_ruleset_classifier import AbstractRulesetClassifier
+from .base import Cond, Rule, Ruleset, asruleset
+from .base_functions import score_accuracy
 from .catnap import CatNap
 from .check import _check_is_model_fit
-from .base import Cond, Rule, Ruleset
-from .base_functions import score_accuracy
 from wittgenstein import utils
 from wittgenstein.utils import rnd
 
@@ -127,8 +127,8 @@ class RIPPER(AbstractRulesetClassifier):
             Name of positive class.
         feature_names : list<str>, optional, default=None
             Specify feature names. If None, feature names default to column names for a DataFrame, or indices in the case of indexed iterables such as an array or list.
-        initial_model : Ruleset or str, default=None
-            Continue training from a preexisting model.
+        initial_model : Ruleset, str, IREP or RIPPER, default=None
+            Preexisting model from which to begin training. See also 'init_ruleset'.
         cn_optimize : bool, default=True
             Use algorithmic speed optimization.
 
@@ -214,8 +214,6 @@ class RIPPER(AbstractRulesetClassifier):
         # Stage 1: Grow initial Ruleset
         ###############################
 
-        #self.set_ruleset(asrulese(initial_model))
-        #if not initial_model: self.ruleset_ = Ruleset()
         if cn_optimize:
             pos_idx = set(pos_df.index.tolist())
             neg_idx = set(neg_df.index.tolist())
@@ -227,6 +225,7 @@ class RIPPER(AbstractRulesetClassifier):
                 max_rules=self.max_rules,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
+                initial_model=initial_model,
                 random_state=self.random_state,
             )
         else:
@@ -238,6 +237,7 @@ class RIPPER(AbstractRulesetClassifier):
                 max_rules=self.max_rules,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
+                initial_model=initial_model,
                 random_state=self.random_state,
             )
         if self.verbosity >= 1:
@@ -353,10 +353,15 @@ class RIPPER(AbstractRulesetClassifier):
         self.selected_features_ = self.ruleset_.get_selected_features()
         self.trainset_features_ = df.drop(self.class_feat, axis=1).columns.tolist()
 
+        # Remove any duplicates and trim
+        self.ruleset_.rules = utils.remove_duplicates(self.ruleset_.rules)
+        self.ruleset_.trim_conds(max_total_conds=self.max_total_conds)
+
         # Fit probas
         self.recalibrate_proba(
             df, min_samples=None, require_min_samples=False, discretize=False
         )
+        self.classes_ = np.array([0, 1])
 
         # Cleanup
         if cn_optimize:
@@ -388,12 +393,11 @@ class RIPPER(AbstractRulesetClassifier):
 
         temp = Ruleset()
         temp._set_possible_conds(df, df)
-        possible_conds = temp.possible_conds
 
         for n in range(1, size + 1):
             rule = Rule([Cond("_", "_")] * n)
             dl = _r_theory_bits(
-                rule, possible_conds, bits_dict=None, verbosity=verbosity
+                rule, temp.possible_conds, bits_dict=None, verbosity=verbosity
             )
             self.dl_dict[n] = dl
             if verbosity >= 2:
@@ -405,28 +409,26 @@ class RIPPER(AbstractRulesetClassifier):
         neg_df,
         prune_size,
         dl_allowance,
-        initial_ruleset=None,
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        initial_model=None,
         random_state=None,
     ):
         """Grow a Ruleset with pruning."""
-        pos_remaining = pos_df.copy()
-        neg_remaining = neg_df.copy()
-
-        if initial_ruleset is None:
-            ruleset = Ruleset()
-            ruleset._set_possible_conds(pos_df, neg_df)
-        else:
-            ruleset = copy.deepcopy(initial_ruleset)
+        ruleset = self._ruleset_frommodel(initial_model)
+        ruleset._set_possible_conds(pos_df, neg_df)
 
         ruleset_dl = None
         mdl = None  # Minimum encountered description length (in bits)
         dl_diff = 0
         if self.verbosity >= 2:
             print("growing ruleset...")
+            print(f"initial model: {ruleset}")
             print()
+
+        pos_remaining = pos_df.copy()
+        neg_remaining = neg_df.copy()
         while len(pos_remaining) > 0 and dl_diff <= self.dl_allowance:
 
             # If applicable, check for user-specified early stopping
@@ -526,9 +528,6 @@ class RIPPER(AbstractRulesetClassifier):
                 )
                 print()
 
-        # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=max_total_conds)
-
         return ruleset
 
     def _grow_ruleset_cn(
@@ -537,20 +536,15 @@ class RIPPER(AbstractRulesetClassifier):
         neg_idx,
         prune_size,
         dl_allowance,
-        initial_ruleset=None,
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        initial_model=None,
         random_state=None,
     ):
         """Grow a Ruleset with pruning."""
-
-        # Initialize new Ruleset
-        if initial_ruleset is None:
-            ruleset = Ruleset()
-            ruleset.possible_conds = self.possible_conds  # cn.conds
-        else:
-            ruleset = copy.deepcopy(initial_ruleset)
+        ruleset = self._ruleset_frommodel(initial_model)
+        ruleset.possible_conds = self.cn.conds
 
         pos_remaining_idx = pos_idx
         neg_remaining_idx = neg_idx
@@ -559,7 +553,9 @@ class RIPPER(AbstractRulesetClassifier):
         dl_diff = 0
         if self.verbosity >= 2:
             print("growing ruleset...")
+            print(f"initial model: {ruleset}")
             print()
+
         while len(pos_remaining_idx) > 0 and dl_diff <= self.dl_allowance:
 
             # If applicable, check for user-specified early stopping
@@ -668,9 +664,6 @@ class RIPPER(AbstractRulesetClassifier):
                     f"examples remaining: {len(pos_remaining_idx)} pos, {len(neg_remaining_idx)} neg"
                 )
                 print()
-
-        # If applicable, trim total conds
-        ruleset.trim_conds(max_total_conds=max_total_conds)
 
         return ruleset
 
@@ -1095,9 +1088,9 @@ class RIPPER(AbstractRulesetClassifier):
             newset = self._grow_ruleset(
                 pos_remaining,
                 neg_remaining,
-                initial_ruleset=self.ruleset_,
+                initial_model=self.ruleset_,
                 prune_size=self.prune_size,
-                dl_allowance=self.dl_allowance,
+                dl_allowance    =self.dl_allowance,
                 max_rules=max_rules,
                 max_rule_conds=max_rule_conds,
                 max_total_conds=max_total_conds,
@@ -1131,7 +1124,7 @@ class RIPPER(AbstractRulesetClassifier):
             newset = self._grow_ruleset_cn(
                 pos_remaining_idx,
                 neg_remaining_idx,
-                initial_ruleset=self.ruleset_,
+                initial_model=self.ruleset_,
                 prune_size=self.prune_size,
                 dl_allowance=self.dl_allowance,
                 max_rules=max_rules,
