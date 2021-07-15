@@ -11,7 +11,7 @@ import pandas as pd
 from random import shuffle, seed
 
 from wittgenstein.base import Cond, Rule, Ruleset
-from wittgenstein.check import _warn, _warn_only_single_class
+from wittgenstein.check import _warn, _warn_only_single_class, _check_model_features_present
 from wittgenstein.utils import rnd
 
 ##########################
@@ -286,6 +286,8 @@ def recalibrate_proba(
         Halt (with warning) if any Rule lacks the minimum number of samples.
         Setting to False will warn, but still replace Rules probabilities even if the minimum number of samples is not met.
     """
+
+    _check_model_features_present(Xy_df, ruleset.get_selected_features())
 
     # At least this many samples per rule (or neg) must be of correct class
     required_correct_samples = 1

@@ -1,6 +1,10 @@
+# Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
+# License: MIT
+
 from wittgenstein.base_functions import score_accuracy
 from wittgenstein.ripper import RIPPER
 from wittgenstein import utils
+
 
 def interpret_model(
     X,
@@ -9,7 +13,7 @@ def interpret_model(
     model_predict_function=None,
     score_function=score_accuracy,
 ):
-    """Interpret a more complex model.
+    """Interpret another model.
 
         Parameters
         ----------
@@ -33,28 +37,44 @@ def interpret_model(
         model_predict(X, model, model_predict_function=model_predict_function)
     )
     interpreter.fit(X, model_preds)
-    resolution = score_resolution(X, interpreter=interpreter, model_preds=model_preds, score_function=score_function)
+    fidelity = score_fidelity(
+        X,
+        interpreter=interpreter,
+        model_preds=model_preds,
+        score_function=score_function,
+    )
     interpreter.base_model = model
-    return interpreter.ruleset_, resolution
+    return interpreter.ruleset_, fidelity
 
 
-def score_model(X, y, model, score_function=score_accuracy, model_predict_function=None):
+def score_model(
+    X, y, model, score_function=score_accuracy, model_predict_function=None
+):
     model_preds = utils.try_np_tonum(
         model_predict(X, model=model, model_predict_function=model_predict_function)
     )
     return score_function(model_preds, y)
 
 
-def score_resolution(X, interpreter, model=None, model_preds=None, model_predict_function=None, score_function=score_accuracy):
+def score_fidelity(
+    X,
+    interpreter,
+    model=None,
+    model_preds=None,
+    model_predict_function=None,
+    score_function=score_accuracy,
+):
     if model is None and model_preds is None:
-        raise ValueError(f'score_resolution: You must pass a model or model predictions')
+        raise ValueError(
+            f"score_fidelity: You must pass a model or model predictions"
+        )
     elif model_preds is None:
         model_preds = utils.try_np_tonum(
             model_predict(X, model, model_predict_function=model_predict_function)
         )
     return interpreter.score(X, model_preds, score_function)
 
-    
+
 def model_predict(X, model, model_predict_function=None):
     if not model_predict_function:
         if _inpackage(model, "sklearn"):
@@ -76,9 +96,12 @@ def _sklearn_predict(X, model):
 
 
 def _keras_predict(X, model):
-    return [p[0] for p in model.predict_classes(X)]
-
-
+    res = [p[0] for p in model.predict_classes(X)]
+    #print(f'result', res)
+    #return res
+    #return model(X)
+    return res
+    
 def _torch_predict(X, model):
     return model(X)
 

@@ -28,11 +28,11 @@ def test_score():
     rip = RIPPER(random_state=42)
 
     irep.fit(train_x, train_y)
-    assert irep.score(test_x, test_y, precision_score) > 0.5
+    assert irep.score(test_x, test_y, precision_score) > 0.4
     assert irep.score(test_x, test_y, recall_score) > 0.2
 
     rip.fit(train_x, train_y)
-    assert rip.score(test_x, test_y, precision_score) > 0.5
+    assert rip.score(test_x, test_y, precision_score) > 0.4
     assert rip.score(test_x, test_y, recall_score) > 0.2
 
 
@@ -40,8 +40,8 @@ def test_cv():
     irep = IREP(random_state=42)
     rip = RIPPER(random_state=42)
 
-    assert max(cross_val_score(irep, train_x, train_y, cv=3)) > 0.5
-    assert max(cross_val_score(rip, train_x, train_y, cv=3)) > 0.5
+    assert max(cross_val_score(irep, train_x, train_y, cv=3)) > 0.4
+    assert max(cross_val_score(rip, train_x, train_y, cv=3)) > 0.4
 
 
 def test_grid_search():

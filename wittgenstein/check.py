@@ -79,7 +79,7 @@ def _check_model_features_present(df, model_selected_features):
     missing_feats = [f for f in model_selected_features if f not in df_feats]
     if missing_feats:
         raise IndexError(
-            f"The features selected by Ruleset model need to be present in prediction dataset. Dataset includes: {df_feats}.\nMissing features names: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use parameter 'feature_names' to specify the names of prediction dataset features.\n"
+            f"The features selected by Ruleset model need to be present in prediction dataset. Dataset provided includes: {df_feats} and is missing the selected features named: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use parameter 'feature_names' to specify the names of prediction dataset features.\n"
         )
 
 

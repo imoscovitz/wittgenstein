@@ -58,14 +58,15 @@ class AbstractRulesetClassifier(ABC):
 
     def __str__(self):
         """Return string representation."""
-        params = str(self.get_params()) + ">"
+        isfit_str = " with fit ruleset" if (hasattr(self, "ruleset_") and self.ruleset_ is not None) else ""
+        params = str(self.get_params())
         params = (
             params.replace(": ", "=")
             .replace("'", "")
             .replace("{", "(")
             .replace("}", ")")
         )
-        return f"<{self.algorithm_name}{params}"
+        return f"<{self.algorithm_name}{params}{isfit_str}>"
 
     __repr__ = __str__
 
@@ -102,6 +103,8 @@ class AbstractRulesetClassifier(ABC):
         """
 
         _check_is_model_fit(self)
+
+        self._ensure_has_bin_transformer()
 
         _upgrade_bin_transformer_ifdepr(self)
 
@@ -252,14 +255,12 @@ class AbstractRulesetClassifier(ABC):
         """Return deep copy of classifier."""
         return deepcopy(self)
 
-    def init_ruleset(self, ruleset=None):
-        if not ruleset:
-            self.ruleset_ = Ruleset()
-        else:
-            self.ruleset_ = asruleset(deepcopy(ruleset))
-
-    def set_ruleset(self, new_ruleset):
-        self.init_ruleset(new_ruleset)
+    def init_ruleset(self, ruleset, class_feat, pos_class):
+        self.ruleset_ = self._ruleset_frommodel(ruleset)
+        self.class_feat = class_feat
+        self.pos_class = pos_class
+        self.selected_features_ = self.ruleset_.get_selected_features()
+        self.trainset_features_ = self.selected_features_
 
     def add_rule(self, new_rule):
         self.ruleset_.add(new_rule)
@@ -304,6 +305,13 @@ class AbstractRulesetClassifier(ABC):
         else:
             raise AttributeError(f"Couldnt recognize type: {type(model)} of model: {model}. Model should be of type Ruleset, str defining a ruleset, or wittgenstein classifier.")
 
+    def _ensure_has_bin_transformer(self):
+        if hasattr(self, "bin_transformer_") and self.bin_transformer_ is not None:
+            return
+        else:
+            self.bin_transformer_ = BinTransformer()
+            self.bin_transformer_.construct_from_ruleset(self.ruleset_)
+
     def _set_deprecated_fit_params(self, params):
         """Handle setting parameters passed to .fit that should have been passed to __init__"""
         found_deprecated_params = []
@@ -318,6 +326,7 @@ class AbstractRulesetClassifier(ABC):
                 "irep/ripper",
                 "fit",
             )
+
 
     def to_csv(self, filename):
         df = self._ruleset_to_df()
@@ -341,7 +350,7 @@ class AbstractRulesetClassifier(ABC):
         self.ruleset_ = ruleset
         self.trainset_features_ = self.ruleset_.get_selected_features()
         self.selected_features_ = self.ruleset_.get_selected_features()
-        self.bin_transformer_ = BinTransformer()._construct_from_ruleset(self.ruleset_)
+        self.bin_transformer_ = BinTransformer().construct_from_ruleset(self.ruleset_)
         self.class_feat = class_feat
         self.pos_class = pos_class
 

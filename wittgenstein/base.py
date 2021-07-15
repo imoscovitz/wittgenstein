@@ -2,7 +2,6 @@
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
-import copy
 import math
 
 import numpy as np
@@ -61,7 +60,7 @@ class Ruleset:
 
     def __eq__(self, other):
         if type(other) != Ruleset:
-            return False
+            raise TypeError(f"Ruleset.__eq__: param 'other': {other} of type {type(other)} should be type Ruleset")
 
         for r in self.rules:
             # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
@@ -149,16 +148,16 @@ class Ruleset:
             conds_set.update(set(new_conds))
         return conds_list
 
-    def _set_possible_conds(self, pos_df, neg_df):
-        """ Stores a list of all possible conds. """
+    def _update_possible_conds(self, pos_df, neg_df):
+        """Store a list of all possible conds."""
 
         # Used in Rule::successors so as not to rebuild it each time,
         # and in exceptions_dl calculations because nCr portion of formula already accounts for no replacement.)
 
-        self.possible_conds = []
+        if not hasattr(self, "possible_conds"): self.possible_conds = []
         for feat in pos_df.columns.values:
             for val in set(pos_df[feat].unique()).intersection(
-                set(neg_df[feat].unique())
+                set(neg_df[feat].unique()) - set(self.possible_conds)
             ):
                 self.possible_conds.append(Cond(feat, val))
 
@@ -504,6 +503,7 @@ def ruleset_fromstr(str_):
 
 
 def ascond(obj):
+    """Return a Cond from a str or Cond"""
     if type(obj) == Cond:
         return obj
     elif type(obj) == str:
@@ -516,33 +516,47 @@ def ascond(obj):
         return Cond(obj[0], obj[1])
     else:
         raise TypeError(
-            f"ascond: {obj} type {type(obj)} cannot be converted to cond. Type should be Cond or str"
+            f"Couldn't interpret {obj} type {type(obj)} as Cond. Type should be Cond or str"
         )
 
 
 def asrule(obj):
+    """Return a Rule from a str or Rule"""
     if type(obj) == Rule:
         return obj
     elif type(obj) == str:
         return rule_fromstr(obj)
+    elif obj is None or not obj:
+        return Rule()
     elif hasattr(obj, "__iter__"):
         try:
             return Rule([ascond(item) for item in obj])
         except:
             raise TypeError(
-                f"asrule: {obj} type {type(obj)} cannot be converted to rule. Type should be Rule, list of Conds, or str"
+                f"Couldn't interpret {obj} type {type(obj)} as a Rule. Type should be Rule, list of Conds, or str"
             )
 
 
 def asruleset(obj):
+    """Return a Ruleset from a str, Ruleset, or classifier"""
     if type(obj) == Ruleset:
         return obj
     elif type(obj) == str:
         return ruleset_fromstr(obj)
+    elif hasattr(obj, 'ruleset_'):
+        return obj.ruleset_
+    elif hasattr(obj, 'fit') and 'wittgenstein' in str(obj.__class__):
+        return Ruleset()
+    elif obj is None or not obj:
+        return Ruleset()
     elif hasattr(obj, "__iter__"):
         try:
             return Ruleset([asrule(item) for item in obj])
         except:
             raise TypeError(
-                f"asruleset: {obj} type {type(obj)} cannot be converted to rule. Type should be Ruleset, list of Rule, or str"
+                f"Couldn't interpret {obj} type {type(obj)} as Ruleset. Type should be Ruleset, a wittgenstein ruleset classifier, list of Rules, or str"
             )
+    else:
+        raise TypeError(
+            f"asruleset: {obj} type {type(obj)} cannot be converted to Ruleset. Type should be Ruleset, a wittgenstein ruleset classifier, list of Rules, or str"
+        )

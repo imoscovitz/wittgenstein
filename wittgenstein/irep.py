@@ -140,6 +140,11 @@ class IREP(AbstractRulesetClassifier):
         """
 
         # SETUP
+        self.ruleset_ = Ruleset() if not initial_model else asruleset(initial_model)
+
+        if self.verbosity >= 1:
+            print("initialize model")
+            print(self.ruleset_)
 
         # Handle any hyperparam deprecation
         self._set_deprecated_fit_params(kwargs)
@@ -181,8 +186,7 @@ class IREP(AbstractRulesetClassifier):
 
         # TRAINING
         if self.verbosity >= 1:
-            print("\nbuilding Ruleset...")
-        initial_model = Ruleset() if not initial_model else asruleset(initial_model)
+            print("\ntraining Ruleset...")
         if not cn_optimize:
             self.ruleset_ = self._grow_ruleset(pos_df, neg_df, initial_model=initial_model)
         else:
@@ -220,7 +224,7 @@ class IREP(AbstractRulesetClassifier):
         """Grow a Ruleset with (optional) pruning."""
 
         ruleset = self._ruleset_frommodel(initial_model)
-        ruleset._set_possible_conds(pos_df, neg_df)
+        ruleset._update_possible_conds(pos_df, neg_df)
 
         if self.verbosity >= 2:
             print("growing ruleset...")
@@ -323,6 +327,7 @@ class IREP(AbstractRulesetClassifier):
 
         if self.verbosity >= 2:
             print("growing ruleset...")
+            print(initial_model)
             print(f"initial model: {ruleset}")
             print()
 

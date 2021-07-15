@@ -281,16 +281,18 @@ def test_fit_boolean_dataset():
 
 def test_fit_discrete_dataset():
 
-    irep = IREP(random_state=0, n_discretize_bins=11)
-    rip = RIPPER(random_state=0, n_discretize_bins=11)
+    irep = IREP(random_state=0, n_discretize_bins=6)
+    rip = RIPPER(random_state=0, n_discretize_bins=6)
 
     discrete_df = CREDIT_DF.select_dtypes(float).applymap(lambda x: int(x % 10))
     discrete_df[CREDIT_CLASS_FEAT] = CREDIT_DF[CREDIT_CLASS_FEAT]
 
     irep.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert not (irep.ruleset_.isuniversal()) and not (irep.ruleset_.isnull())
+    print(f'this is the ruleset!', irep.ruleset_)
+    assert (not irep.ruleset_.isuniversal()) and (not irep.ruleset_.isnull())
     rip.fit(discrete_df, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
-    assert not (rip.ruleset_.isuniversal()) and not (rip.ruleset_.isnull())
+    print(rip.ruleset_)
+    assert (not rip.ruleset_.isuniversal()) and (not rip.ruleset_.isnull())
 
 
 def test_verbosity():
@@ -298,6 +300,7 @@ def test_verbosity():
     rip_v5 = RIPPER(random_state=42, verbosity=5)
 
     irep_v5.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    print('irep_v5', irep_v5)#, irep_v5.ruleset_)
     assert irep_v5.ruleset_ == IREP_RULESET_42
     rip_v5.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
     assert rip_v5.ruleset_ == RIP_RULESET_42
@@ -345,8 +348,3 @@ def test_df_isnt_modified():
     rip = RIPPER(random_state=42)
     rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert df.equals(old_df)
-
-
-def test_model_seed():
-    # STUB
-    assert 0 == 1

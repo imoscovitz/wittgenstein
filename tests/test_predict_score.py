@@ -109,3 +109,39 @@ def test_verbosity():
     rip_v5 = RIPPER(random_state=42, verbosity=5)
     rip_v5.fit(train, class_feat=CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert rip_v5.score(test_x, test_y) == pytest.approx(rip.score(test_x, test_y))
+
+
+def test_missing_non_selected_features():
+    missing_feat_df = test_x.copy()
+    missing_feat_df.drop('A1', axis=1, inplace=True)
+
+    irep_preds = irep.predict(missing_feat_df)
+    assert all(p in (True, False) for p in irep_preds)
+    assert not all(p == True for p in irep_preds)
+    assert not all(p == False for p in irep_preds)
+    assert sum(irep_preds) == 128
+
+    rip_preds = rip.predict(missing_feat_df)
+    assert all(p in (True, False) for p in rip_preds)
+    assert not all(p == True for p in rip_preds)
+    assert not all(p == False for p in rip_preds)
+    assert sum(rip_preds) == 112
+
+
+def test_missing_selected_features_raise_eror():
+    missing_feat_df = test_x.copy()
+    missing_feat_df.drop('A9', axis=1, inplace=True)
+
+    try:
+        irep_preds = irep.predict(missing_feat_df)
+        exception_raised = False
+    except:
+        exception_raised = True
+    assert exception_raised
+
+    try:
+        rip_preds = rip.predict(missing_feat_df)
+        exception_raised = False
+    except:
+        exception_raised = True
+    assert exception_raised

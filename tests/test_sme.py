@@ -9,6 +9,8 @@ from wittgenstein.ripper import RIPPER
 from wittgenstein.base import Ruleset, ruleset_fromstr, rule_fromstr
 
 DF = pd.read_csv("mushroom.csv")
+class_feat = "Poisonous/Edible"
+pos_class = "p"
 original_ruleset_str = "[[Odor=f] V [Gill-size=n] V [Spore-print-color=r] V [Odor=m]]"
 original_ruleset = ruleset_fromstr(original_ruleset_str)
 original_rules = original_ruleset.rules
@@ -24,27 +26,51 @@ credit_pos_class = "+"
 credit_rip = RIPPER(random_state=42, verbosity=0)
 credit_rip.fit(credit_df, class_feat="Class", pos_class="+")
 credit_original_ruleset = ruleset_fromstr(
-    "[[A9=t ^ A10=t ^ A4=u ^ A1=b ^ A11=7-16] V \
-    [A9=t ^ A10=t ^ A4=u ^ A11=3-7] V \
-    [A9=t ^ A10=t ^ A14=0] V \
-    [A9=t ^ A10=t] V \
-    [A9=t ^ A7=h ^ A6=q]]"
+    "[[A9=t^A10=t^A14=0] V [A9=t^A10=t^A15=1000-4607] V [A9=t^A10=t^A11=3-7^A12=f] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000]]"
 )
 assert credit_rip.ruleset_ == credit_original_ruleset
 
 
 def test_initruleset():
+    # IREP
+    empty_ruleset = Ruleset()
     irep = IREP(random_state=42)
-    irep.init_ruleset()
-    irep.ruleset_ == Ruleset()
+    irep.init_ruleset(empty_ruleset, class_feat, pos_class)
+    assert irep.ruleset_ == empty_ruleset
+    assert irep.class_feat == class_feat
+    assert irep.pos_class == pos_class
 
     irep = IREP(random_state=42)
-    irep.init_ruleset(original_ruleset)
-    irep.ruleset_ == original_ruleset
+    irep.init_ruleset(original_ruleset, class_feat, pos_class)
+    assert irep.ruleset_ == original_ruleset
+    assert irep.class_feat == class_feat
+    assert irep.pos_class == pos_class
 
     irep = IREP(random_state=42)
-    irep.init_ruleset(original_ruleset_str)
-    irep.ruleset_ == original_ruleset
+    irep.init_ruleset(original_ruleset_str, class_feat, pos_class)
+    assert irep.ruleset_ == original_ruleset
+    assert irep.class_feat == class_feat
+    assert irep.pos_class == pos_class
+
+    # RIPPER
+    empty_ruleset = Ruleset()
+    rip = RIPPER(random_state=42)
+    rip.init_ruleset(empty_ruleset, class_feat, pos_class)
+    assert rip.ruleset_ == empty_ruleset
+    assert rip.class_feat == class_feat
+    assert rip.pos_class == pos_class
+
+    rip = RIPPER(random_state=42)
+    rip.init_ruleset(original_ruleset, class_feat, pos_class)
+    assert rip.ruleset_ == original_ruleset
+    assert rip.class_feat == class_feat
+    assert rip.pos_class == pos_class
+
+    rip = RIPPER(random_state=42)
+    rip.init_ruleset(original_ruleset_str, class_feat, pos_class)
+    assert rip.ruleset_ == original_ruleset
+    assert rip.class_feat == class_feat
+    assert rip.pos_class == pos_class
 
 
 def set_ruleset():
@@ -128,34 +154,23 @@ def test_save_load_csv():
     rip.add_rule("[A8=-2.5--1.2]")
     # Make sure set up works:
     assert rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t ^ A10=t ^ A4=u ^ A1=b ^ A11=7-16] V \
-        [A9=t ^ A10=t] V \
-        [A9=t ^ A7=h ^ A6=q] V \
-        [A8=-2.5--1.2]]"
+        "[[A9=t^A10=t^A14=0] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000] V [A8=-2.5--1.2]]"
     )
     # Save
     rip.to_csv(csv_filename)
-    new_rip = RIPPER(random_state=42)
+    loaded_rip = RIPPER(random_state=42)
     # Load
-    new_rip.from_csv(
+    loaded_rip.from_csv(
         csv_filename, class_feat=credit_class_feat, pos_class=credit_pos_class
     )
     os.remove(csv_filename)
-    assert new_rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t ^ A10=t ^ A4=u ^ A1=b ^ A11=7-16] V \
-        [A9=t ^ A10=t] V \
-        [A9=t ^ A7=h ^ A6=q] V \
-        [A8=-2.5--1.2]]"
-    )
-    assert new_rip.bin_transformer_.bins_ == {
-        "A11": [("7", "16")],
-        "A8": [("-2.5", "-1.2")],
-    }
-    assert new_rip.bin_transformer_.n_discretize_bins == 10
-    assert new_rip.bin_transformer_.names_precision == 1
-    assert new_rip.bin_transformer_.verbosity == 0
-    assert new_rip.class_feat == credit_class_feat
-    assert new_rip.pos_class == credit_pos_class
+    assert loaded_rip.ruleset_ == rip.ruleset_
+    assert loaded_rip.bin_transformer_.bins_ == rip.bin_transformer_.bins_
+    assert loaded_rip.bin_transformer_.n_discretize_bins == 10
+    assert loaded_rip.bin_transformer_.names_precision == 1
+    assert loaded_rip.bin_transformer_.verbosity == 0
+    assert loaded_rip.class_feat == credit_class_feat
+    assert loaded_rip.pos_class == credit_pos_class
 
 
 def test_save_load_txt():
@@ -166,89 +181,99 @@ def test_save_load_txt():
     rip.add_rule("[A8=-2.5--1.2]")
     # Make sure set up works:
     assert rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t ^ A10=t ^ A4=u ^ A1=b ^ A11=7-16] V \
-        [A9=t ^ A10=t] V \
-        [A9=t ^ A7=h ^ A6=q] V \
-        [A8=-2.5--1.2]]"
+        "[[A9=t^A10=t^A14=0] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000] V [A8=-2.5--1.2]]"
     )
     # Save
     rip.to_txt(txt_filename)
-    new_rip = RIPPER(random_state=42)
+    loaded_rip = RIPPER(random_state=42)
     # Load
-    new_rip.from_txt(
+    loaded_rip.from_txt(
         txt_filename, class_feat=credit_class_feat, pos_class=credit_pos_class
     )
     os.remove(txt_filename)
-    assert new_rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t ^ A10=t ^ A4=u ^ A1=b ^ A11=7-16] V \
-        [A9=t ^ A10=t] V \
-        [A9=t ^ A7=h ^ A6=q] V \
-        [A8=-2.5--1.2]]"
-    )
-    assert new_rip.bin_transformer_.bins_ == {
+    assert loaded_rip.ruleset_ == rip.ruleset_
+    assert loaded_rip.bin_transformer_.bins_ == {
         "A11": [("7", "16")],
         "A8": [("-2.5", "-1.2")],
     }
-    assert new_rip.bin_transformer_.n_discretize_bins == 10
-    assert new_rip.bin_transformer_.names_precision == 1
-    assert new_rip.bin_transformer_.verbosity == 0
-    assert new_rip.class_feat == credit_class_feat
-    assert new_rip.pos_class == credit_pos_class
+    assert loaded_rip.bin_transformer_.n_discretize_bins == 10
+    assert loaded_rip.bin_transformer_.names_precision == 1
+    assert loaded_rip.bin_transformer_.verbosity == 0
+    assert loaded_rip.class_feat == credit_class_feat
+    assert loaded_rip.pos_class == credit_pos_class
 
 
 def test_use_initial_model():
 
-    initial_model = "[[A9=t ^ A10=t]]"
+    initial_model = "[[A9=t^A6=w] ^ [hello=world]]"
     expected_irep = ruleset_fromstr(
-        """[[A9=t ^ A10=t] V
-        [A9=t ^ A7=h] V
-        [A9=t ^ A4=u ^ A7=v]]
         """
+        [[A9=t^A6=w^hello=world] V
+        [A9=t^A10=t] V
+        [A9=t^A7=h] V
+        [A9=t^A4=u^A7=v]]
+        """
+        #[[A9=t^A10=t^hello=world] V [A9=t^A10=t] V [A9=t^A7=h] V [A9=t^A4=u^A7=v]]
     )
     expected_rip = ruleset_fromstr(
-        """[[A9=t ^ A10=t] V
-        [A9=t ^ A7=h] V
-        [A9=t ^ A4=u ^ A14=0 ^ A15=0-0] V
-        [A9=t ^ A6=w]]
+        """
+        [[A9=t^A6=w^hello=world] V
+        [A9=t^A10=t] V
+        [A9=t^A7=h] V
+        [A9=t^A4=u^A14=0^A15=0-0] V
+        [A9=t^A6=w]]
         """
     )
 
+    updated_credit_df = credit_df.copy()
+    updated_credit_df['hello'] = 'earth2'
+
     # From str
     irep = IREP(random_state=1)
-    irep.fit(credit_df, class_feat='Class', pos_class='+',
+    irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_model
     )
     assert irep.ruleset_ == expected_irep
     rip = RIPPER(random_state=1)
-    rip.fit(credit_df, class_feat='Class', pos_class='+',
+    rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_model
     )
     assert rip.ruleset_ == expected_rip
 
-    # From IREP
-    initial_irep_model = IREP()
-    initial_irep_model.init_ruleset(initial_model)
-    irep = IREP(random_state=1)
-    irep.fit(credit_df, class_feat='Class', pos_class='+',
+    # From IREP to IREP/RIPPER
+    initial_irep_model = IREP(random_state=1)
+    initial_irep_model.init_ruleset(
+        initial_model,
+        class_feat='Poisonous/Edible',
+        pos_class='p'
+    )
+    print('initial irep model')
+    print(initial_irep_model.ruleset_)
+    irep = IREP(random_state=1, verbosity=1)
+    irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_irep_model
     )
+    print("OUTPUT`")
+    print(irep.ruleset_)
+    print()
+    print(expected_irep)
     assert irep.ruleset_ == expected_irep
     rip = RIPPER(random_state=1)
-    rip.fit(credit_df, class_feat='Class', pos_class='+',
+    rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_irep_model
     )
     assert rip.ruleset_ == expected_rip
 
     # From RIP
     initial_rip_model = RIPPER()
-    initial_rip_model.init_ruleset(initial_model)
+    initial_rip_model.init_ruleset(initial_model, class_feat='Poisonous/Edible', pos_class='p')
     irep = IREP(random_state=1)
-    irep.fit(credit_df, class_feat='Class', pos_class='+',
+    irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_rip_model
     )
     assert irep.ruleset_ == expected_irep
     rip = RIPPER(random_state=1)
-    rip.fit(credit_df, class_feat='Class', pos_class='+',
+    rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_rip_model
     )
     assert rip.ruleset_ == expected_rip

@@ -248,14 +248,14 @@ class BinTransformer:
         else:
             return None
 
-    def _construct_from_ruleset(self, ruleset):
+    def construct_from_ruleset(self, ruleset):
         MIN_N_DISCRETIZED_BINS = 10
 
         bt = BinTransformer()
         bt.bins_ = self._bin_prediscretized_features(ruleset)
         bt.n_discretize_bins = max(
-            (MIN_N_DISCRETIZED_BINS, max(len(bins) for bins in bt.bins_.values()))
-        )
+            (MIN_N_DISCRETIZED_BINS, max([len(bins) for bins in bt.bins_.values()]))
+        ) if bt.bins_ else MIN_N_DISCRETIZED_BINS
         bt.names_precision = self._max_dec_precision(bt.bins_)
         return bt
 
@@ -286,7 +286,7 @@ class BinTransformer:
             else:
                 return None
 
-        # Main function: _bin_prediscretized_features
+        # _bin_prediscretized_features
         discrete = defaultdict(list)
         for cond in ruleset.get_conds():
             floor_ceil = find_floor_ceil(cond.val)

@@ -207,8 +207,7 @@ class RIPPER(AbstractRulesetClassifier):
         pos_df = pos_df.drop(self.class_feat, axis=1)
         neg_df = neg_df.drop(self.class_feat, axis=1)
 
-        # Collect possible conds
-        self._set_possible_conds(df)
+        
 
         ###############################
         # Stage 1: Grow initial Ruleset
@@ -392,7 +391,7 @@ class RIPPER(AbstractRulesetClassifier):
         self.dl_dict = {}
 
         temp = Ruleset()
-        temp._set_possible_conds(df, df)
+        temp._update_possible_conds(df, df)
 
         for n in range(1, size + 1):
             rule = Rule([Cond("_", "_")] * n)
@@ -417,7 +416,7 @@ class RIPPER(AbstractRulesetClassifier):
     ):
         """Grow a Ruleset with pruning."""
         ruleset = self._ruleset_frommodel(initial_model)
-        ruleset._set_possible_conds(pos_df, neg_df)
+        ruleset._update_possible_conds(pos_df, neg_df)
 
         ruleset_dl = None
         mdl = None  # Minimum encountered description length (in bits)
@@ -1058,13 +1057,6 @@ class RIPPER(AbstractRulesetClassifier):
 
         return new_ruleset
 
-    def _set_possible_conds(self, df):
-        self.possible_conds = []
-        for feat in df.columns.values:
-            if feat != self.class_feat:
-                for val in df[feat].unique():
-                    self.possible_conds.append(Cond(feat, val))
-
     def _cover_remaining_positives(
         self,
         df,
@@ -1149,6 +1141,8 @@ class RIPPER(AbstractRulesetClassifier):
             # if parameter in self.VALID_HYPERPARAMETERS:
             setattr(self, parameter, value)
         return self
+
+
 
 
 ###################################
