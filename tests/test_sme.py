@@ -26,8 +26,8 @@ credit_pos_class = "+"
 credit_rip = RIPPER(random_state=42, verbosity=0)
 credit_rip.fit(credit_df, class_feat="Class", pos_class="+")
 credit_original_ruleset = ruleset_fromstr(
-    "[[A9=t^A10=t^A14=0] V [A9=t^A10=t^A15=1000-4607] V [A9=t^A10=t^A11=3-7^A12=f] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000]]"
-)
+    #"[[A9=t^A10=t^A14=0] V [A9=t^A10=t^A15=1000-4607] V [A9=t^A10=t^A11=3-7^A12=f] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000]]"
+    "[[A9=t^A10=t^A14=0] V [A9=t^A10=t^A11=4.0-8.1^A12=f] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A7=h] V [A9=t^A7=v^A8=<0.12] V [A9=t^A4=u^A14=0]]")
 assert credit_rip.ruleset_ == credit_original_ruleset
 
 
@@ -207,58 +207,40 @@ def test_use_initial_model():
 
     initial_model = "[[A9=t^A6=w] ^ [hello=world]]"
     expected_irep = ruleset_fromstr(
-        """
-        [[A9=t^A6=w^hello=world] V
-        [A9=t^A10=t] V
-        [A9=t^A7=h] V
-        [A9=t^A4=u^A7=v]]
-        """
-        #[[A9=t^A10=t^hello=world] V [A9=t^A10=t] V [A9=t^A7=h] V [A9=t^A4=u^A7=v]]
+        "[[A9=t^A6=w^hello=world] V [A9=t]]"
     )
     expected_rip = ruleset_fromstr(
-        """
-        [[A9=t^A6=w^hello=world] V
-        [A9=t^A10=t] V
-        [A9=t^A7=h] V
-        [A9=t^A4=u^A14=0^A15=0-0] V
-        [A9=t^A6=w]]
-        """
+         "A9=t^A6=w^hello=world] V [A9=t^A10=t^A14=0] V [A9=t^A10=t^A11=4.0-8.1^A12=f] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A7=h] V [A9=t^A7=v^A8=<0.12] V [A9=t^A4=u^A14=0]]"
     )
 
     updated_credit_df = credit_df.copy()
     updated_credit_df['hello'] = 'earth2'
 
     # From str
-    irep = IREP(random_state=1)
+    irep = IREP(random_state=42)
     irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_model
     )
     assert irep.ruleset_ == expected_irep
-    rip = RIPPER(random_state=1)
+    rip = RIPPER(random_state=42)
     rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_model
     )
     assert rip.ruleset_ == expected_rip
 
     # From IREP to IREP/RIPPER
-    initial_irep_model = IREP(random_state=1)
+    initial_irep_model = IREP(random_state=42)
     initial_irep_model.init_ruleset(
         initial_model,
         class_feat='Poisonous/Edible',
         pos_class='p'
     )
-    print('initial irep model')
-    print(initial_irep_model.ruleset_)
-    irep = IREP(random_state=1, verbosity=1)
+    irep = IREP(random_state=42, verbosity=1)
     irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_irep_model
     )
-    print("OUTPUT`")
-    print(irep.ruleset_)
-    print()
-    print(expected_irep)
     assert irep.ruleset_ == expected_irep
-    rip = RIPPER(random_state=1)
+    rip = RIPPER(random_state=42)
     rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_irep_model
     )
@@ -267,12 +249,12 @@ def test_use_initial_model():
     # From RIP
     initial_rip_model = RIPPER()
     initial_rip_model.init_ruleset(initial_model, class_feat='Poisonous/Edible', pos_class='p')
-    irep = IREP(random_state=1)
+    irep = IREP(random_state=42)
     irep.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_rip_model
     )
     assert irep.ruleset_ == expected_irep
-    rip = RIPPER(random_state=1)
+    rip = RIPPER(random_state=42)
     rip.fit(updated_credit_df, class_feat='Class', pos_class='+',
             initial_model=initial_rip_model
     )

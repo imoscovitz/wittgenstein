@@ -185,6 +185,7 @@ def test_preprocess_training_data_XY_rename_columns():
     assert ret_bin_transformer_.isempty()
 
 
+"""
 def test_deprecated_bin_transformer():
     deprecated_bin_transformer = {
         "A11": [(0, 1), (1, 2), (2, 4), (4, 8), (8, 17), (17, 67)],
@@ -232,3 +233,4 @@ def test_deprecated_bin_transformer():
     rip.fit(df, class_feat="Class", pos_class="+")
     rip.bin_transformer_ = deprecated_bin_transformer
     preds = rip.predict(df)
+""";

@@ -48,7 +48,7 @@ def test_predict():
     assert all(p in (True, False) for p in rip_preds)
     assert not all(p == True for p in rip_preds)
     assert not all(p == False for p in rip_preds)
-    assert sum(rip_preds) == 112
+    assert sum(rip_preds) == 99
 
 
 def test_predict_give_reasons():
@@ -81,7 +81,7 @@ def test_predict_proba():
                 for pred, proba in zip(irep_preds, irep_probas)
             ]
         )
-        >= 0.90
+        >= 0.80
     )
     rip_preds = rip.predict(test_x)
     rip_probas = irep.predict_proba(test_x)
@@ -92,13 +92,13 @@ def test_predict_proba():
                 for pred, proba in zip(rip_preds, irep_probas)
             ]
         )
-        >= 0.90
+        >= 0.80
     )
 
 
 def test_score():
     assert irep.score(test_x, test_y) == pytest.approx(0.8382978723404255)
-    assert rip.score(test_x, test_y) == pytest.approx(0.8468085106382979)
+    assert rip.score(test_x, test_y) == pytest.approx(0.825531914893617)
 
 
 def test_verbosity():
@@ -125,7 +125,7 @@ def test_missing_non_selected_features():
     assert all(p in (True, False) for p in rip_preds)
     assert not all(p == True for p in rip_preds)
     assert not all(p == False for p in rip_preds)
-    assert sum(rip_preds) == 112
+    assert sum(rip_preds) == 99
 
 
 def test_missing_selected_features_raise_eror():
