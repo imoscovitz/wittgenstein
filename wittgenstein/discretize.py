@@ -1,8 +1,10 @@
 # Author: Ilan Moscovitz <ilan.moscovitz@gmail.com>
 # License: MIT
 
+from copy import deepcopy
 from collections import defaultdict
 import numpy as np
+import pandas as pd
 
 from wittgenstein.base_functions import truncstr
 from wittgenstein.utils import rnd
@@ -48,40 +50,90 @@ class BinTransformer:
         self.fit(df, ignore_feats=ignore_feats)
         return self.transform(df)
 
-    def transform(self, df, ignore_feats=[]):
-        """Return df with seemingly continuous features binned, and the bin_transformer or None depending on whether binning occurs."""
+    def fit(self, df, output=False, ignore_feats=[]):
+        """
+        Returns a dict defining fits for numerical features
+        A fit is an ordered list of tuples defining each bin's range (min is exclusive; max is inclusive)
 
-        if n_discretize_bins is None:
-            return df
+        Returned dict allows for fitting to training data and applying the same fit to test data
+        to avoid information leak.
+        """
 
-        if self.bins_ == {}:
-            return df
+        def _fit_feat(df, feat):
+            """Return list of tuples defining bin ranges for a numerical feature using simple linear search"""
 
-        isbinned = False
-        continuous_feats = find_continuous_feats(df, ignore_feats=ignore_feats)
-        if self.n_discretize_bins:
-            if continuous_feats:
-                if self.verbosity == 1:
-                    print(f"binning data...\n")
-                elif self.verbosity >= 2:
-                    print(f"binning features {continuous_feats}...")
-                binned_df = df.copy()
-                bin_transformer = fit_bins(
-                    binned_df, output=False, ignore_feats=ignore_feats,
-                )
-                binned_df = bin_transform(binned_df, bin_transformer)
-                isbinned = True
-        else:
-            n_unique_values = sum(
-                [len(u) for u in [df[f].unique() for f in continuous_feats]]
+            if len(df) == 0:
+                return []
+
+            n_discretize_bins = min(
+                self.n_discretize_bins, len(df[feat].unique())
             )
-            warning_str = f"There are {len(continuous_feats)} features to be treated as continuous: {continuous_feats}. \n Treating {n_unique_values} numeric values as nominal or discrete. To auto-discretize features, assign a value to parameter 'n_discretize_bins.'"
-            _warn(warning_str, RuntimeWarning, filename="base", funcname="transform")
-        if isbinned:
-            self.bins_ = bin_transformer
-            return binned_df, bin_transformer
-        else:
-            return df
+
+            # Collect intervals
+            bins = pd.qcut(
+                df[feat],
+                q=self.n_discretize_bins,
+                precision=self.names_precision,
+                duplicates='drop')
+            if len(bins.unique()) < 2: # qcut can behave weirdly in heavily-skewed distributions
+                bins = pd.cut(
+                    df[feat],
+                    bins=self.n_discretize_bins,
+                    precision=self.names_precision,
+                    duplicates='drop')
+
+            # Drop empty bins and duplicate intervals to create bins
+            bin_counts = bins.value_counts()
+            bins = bin_counts[bin_counts>0].index
+            bins = sorted(bins.unique())
+
+            # Extend min/max to -inf, +inf to capture any ranges not present in training set
+            bins[0] = pd.Interval(float('-inf'), bins[0].right)
+            bins[-1] = pd.Interval(bins[-1].left, float('inf'))
+            bins = self._intervals_to_strs(bins)
+
+            if self.verbosity >= 3:
+                print(
+                    f"{feat}: fit {len(df[feat].unique())} unique vals into {len(bins)} bins"
+                )
+            return bins
+
+        # Begin fitting
+        feats_to_fit = self.find_continuous_feats(df, ignore_feats=ignore_feats)
+
+        if feats_to_fit:
+            if self.verbosity == 1:
+                print(f"discretizing {len(feats_to_fit)} features")
+            elif self.verbosity == 2:
+                print(f"discretizing {len(feats_to_fit)} features: {feats_to_fit}\n")
+
+        self.bins_ = {}
+        for feat in feats_to_fit:
+            self.bins_[feat] = _fit_feat(df, feat)
+        return self.bins_
+
+    def transform(self, df):
+        """Transform DataFrame using fit bins."""
+
+        def _transform_feat(df, feat):
+
+            if self.bins_ is None:
+                return df
+
+            res = deepcopy(df[feat])
+            bins = self._strs_to_intervals(self.bins_[feat])
+            res = pd.cut(df[feat], bins=pd.IntervalIndex(bins))
+            res = res.map(lambda x: {i:s for i,s in zip(bins, self.bins_[feat])}.get(x))
+            return res
+
+        # Exclude any feats already transformed into valid intervals
+        already_transformed_feats = self._find_transformed(df, raise_invalid=True)
+
+        res = df.copy()
+        for feat in self.bins_.keys():
+            if feat in res.columns and feat not in already_transformed_feats:
+                res[feat] = _transform_feat(res, feat)
+        return res
 
     def find_continuous_feats(self, df, ignore_feats=[]):
         """Return names of df features that seem to be continuous."""
@@ -102,151 +154,44 @@ class BinTransformer:
 
         return cont_feats
 
-    def fit(self, df, output=False, ignore_feats=[]):
-        """
-        Returns a dict definings fits for numerical features
-        A fit is an ordered list of tuples defining each bin's range (min is exclusive; max is inclusive)
+    def _strs_to_intervals(self, strs):
+        return [self._str_to_interval(s) for s in strs]
 
-        Returned dict allows for fitting to training data and applying the same fit to test data
-        to avoid information leak.
-        """
+    def _str_to_interval(self, s):
+        floor, ceil = self._str_to_floor_ceil(s)
+        return pd.Interval(floor, ceil)
 
-        def _fit_feat(df, feat):
-            """Return list of tuples defining bin ranges for a numerical feature using simple linear search"""
+    def _intervals_to_strs(self, intervals):
+        """Replace a list of intervals with their string representation."""
+        return [self._interval_to_str(interval) for interval in intervals]
 
-            if len(df) == 0:
-                return []
-
-            n_discretize_bins = min(
-                self.n_discretize_bins, len(df[feat].unique())
-            )  # In case there are fewer unique values than n_discretize_bins
-            bin_size = len(df) // n_discretize_bins
-            sorted_df = df.sort_values(by=[feat])
-            sorted_values = sorted_df[feat].tolist()
-
-            sizes = []  # for verbosity output
-            if self.verbosity >= 4:
-                print(
-                    f"{feat}: fitting {len(df[feat].unique())} unique vals into {n_discretize_bins} bins"
-                )
-
-            bin_ranges = []  # result
-            bin_num = 0  # current bin number
-
-            ceil_i = -1  # current bin ceiling index
-            ceil_val = None  # current bin upper bound
-
-            floor_i = 0  # current bin start index
-            floor_val = sorted_df.iloc[0][feat]  # current bin floor value
-
-            prev_finish_val = None  # prev bin upper bound
-            while bin_num < n_discretize_bins and floor_i < len(sorted_values):
-                # jump to tentative ceiling index
-                ceil_i = min(floor_i + bin_size, len(sorted_df) - 1)
-                ceil_val = sorted_df.iloc[ceil_i][feat]
-
-                # increment ceiling index until encounter a new value to ensure next bin size is correct
-                while (
-                    ceil_i < len(sorted_df) - 1  # not last bin
-                    and sorted_df.iloc[ceil_i][feat]
-                    == ceil_val  # keep looking for a new value
-                ):
-                    ceil_i += 1
-
-                # found ceiling index. update values
-                if self.verbosity >= 4:
-                    sizes.append(ceil_i - floor_i)
-                    print(
-                        f"bin #{bin_num}, floor idx {floor_i} value: {sorted_df.iloc[floor_i][feat]}, ceiling idx {ceil_i} value: {sorted_df.iloc[ceil_i][feat]}"
-                    )
-                bin_range = (floor_val, ceil_val)
-                bin_ranges.append(bin_range)
-
-                # update for next bin
-                floor_i = ceil_i + 1
-                floor_val = ceil_val
-                bin_num += 1
-
-            # Guarantee min and max values
-            bin_ranges[0] = (sorted_df.iloc[0][feat], bin_ranges[0][1])
-            bin_ranges[-1] = (bin_ranges[-1][0], sorted_df.iloc[-1][feat])
-
-            if self.verbosity >= 4:
-                print(
-                    f"-bin sizes {sizes}; dataVMR={rnd(np.var(df[feat])/np.mean(df[feat]))}, binVMR={rnd(np.var(sizes)/np.mean(sizes))}"
-                )  # , axis=None, dtype=None, out=None, ddof=0)})
-            return bin_ranges
-
-        # Create dict to store fit definitions for each feature
-        fit_dict = {}
-        feats_to_fit = self.find_continuous_feats(df, ignore_feats=ignore_feats)
-        if self.verbosity == 2:
-            print(f"fitting bins for features {feats_to_fit}")
-        if self.verbosity >= 2:
-            print()
-
-        # Collect fits in dict
-        count = 1
-        for feat in feats_to_fit:
-            fit = _fit_feat(df, feat)
-            fit_dict[feat] = fit
-        self.bins_ = fit_dict
-
-    def transform(self, df):
-        """
-        Uses a pre-collected dictionary of fits to transform df features into bins.
-        Returns the fit df rather than modifying inplace.
-        """
-
-        if self.bins_ is None:
-            return df
-
-        # Replace each feature with bin transformations
-        for feat, bin_fit_list in self.bins_.items():
-            if feat in df.columns:
-                df[feat] = df[feat].map(
-                    lambda x: self._transform_value(x, bin_fit_list)
-                )
-        return df
-
-    def _transform_value(self, value, bin_fit_list):
-        """Return bin string name for a given numerical value. Assumes bin_fit_list is ordered."""
-        min_val, min_bin = bin_fit_list[0][0], bin_fit_list[0]
-        max_val, max_bin = bin_fit_list[-1][1], bin_fit_list[-1]
-        for bin_fit in bin_fit_list:
-            if value <= bin_fit[1]:
-                start_name = (
-                    str(round(bin_fit[0], self.names_precision))
-                    if self.names_precision
-                    else str(int(bin_fit[0]))
-                )
-                finish_name = (
-                    str(round(bin_fit[1], self.names_precision))
-                    if self.names_precision
-                    else str(int(bin_fit[1]))
-                )
-                bin_name = "-".join([start_name, finish_name])
-                return bin_name
-        if value <= min_val:
-            return min_bin
-        elif value >= max_val:
-            return max_bin
+    def _interval_to_str(self, interval):
+        if interval.left == float('-inf'):
+            return f'<{interval.right}'
+        elif interval.right == float('inf'):
+            return f'>{interval.left}'
         else:
-            raise ValueError("No bin found for value", value)
+            return f'{interval.left}-{interval.right}'
 
-    def _try_rename_features(self, df, class_feat, feature_names):
-        """Rename df columns according to user request."""
-        # Rename if same number of features
-        df_columns = [col for col in df.columns.tolist() if col != class_feat]
-        if len(df_columns) == len(feature_names):
-            col_replacements_dict = {
-                old: new for old, new in zip(df_columns, feature_names)
-            }
-            df = df.rename(columns=col_replacements_dict)
-            return df
-        # Wrong number of feature names
+    def _str_to_floor_ceil(self, value):
+        """Find min, max separated by a dash"""#. Return None if invalid pattern."""
+        if '<' in value:
+            floor, ceil = '-inf', value.replace('<','')
+        elif '>' in value:
+            floor, ceil = value.replace('>',''), 'inf'
         else:
-            return None
+            split_idx = 0
+            for i, char in enumerate(value):
+                # Found a possible split and it's not the first number's minus sign
+                if char == "-" and i != 0:
+                    if split_idx is not None and not split_idx:
+                        split_idx = i
+                    # Found a - after the split, and it's not the minus of a negative number
+                    elif i > split_idx + 1:
+                        return None
+            floor = value[:split_idx]
+            ceil = value[split_idx + 1 :]
+        return float(floor), float(ceil)
 
     def construct_from_ruleset(self, ruleset):
         MIN_N_DISCRETIZED_BINS = 10
@@ -289,7 +234,7 @@ class BinTransformer:
         # _bin_prediscretized_features
         discrete = defaultdict(list)
         for cond in ruleset.get_conds():
-            floor_ceil = find_floor_ceil(cond.val)
+            floor_ceil = self.find_floor_ceil(cond.val)
             if floor_ceil:
                 discrete[cond.feature].append(floor_ceil)
         for feat, ranges in discrete.items():
@@ -311,3 +256,18 @@ class BinTransformer:
                     if cur_prec > max_prec:
                         max_prec = cur_prec
         return max_prec
+
+    def _find_transformed(self, df, raise_invalid=True):
+        """Find columns that appear to have already been transformed. Raise error if there is a range that doesn't match a fit bin."""
+
+        check_feats = df.select_dtypes(include=['category', 'object']).columns.tolist()
+        invalid_feats = {}
+        transformed_feats = []
+        for feat, bins in self.bins_.items():
+            if feat in check_feats:
+                transformed_feats.append(feat)
+                invalid_values = set(df[feat].tolist()) - set(bins)
+                if invalid_values: invalid_feats[feat] = invalid_values
+        if invalid_feats and raise_invalid:
+            raise ValueError(f"The following input values seem to be transformed but ranges don't match fit bins: {invalid_feats}")
+        return transformed_feats
