@@ -11,7 +11,7 @@ from keras.layers import Dense
 
 from wittgenstein.irep import IREP
 from wittgenstein.ripper import RIPPER
-from wittgenstein.interpret import interpret_model
+from wittgenstein.interpret import interpret_model, score_fidelity
 
 inpath = ""
 df = pd.read_csv(inpath + "credit.csv")
@@ -56,12 +56,12 @@ def test_interpret_keras():
 
     base_model = model
     irep = IREP(random_state=42)
-    _, _ = interpret_model(model=base_model, X=X_test_wine, interpreter=irep)
+    interpret_model(model=base_model, X=X_test_wine, interpreter=irep)
     assert (irep.base_model) and (not irep.ruleset_.isuniversal()) and (not irep.ruleset_.isnull())
     irep.predict(X_test)
 
     rip = RIPPER(random_state=42)
-    _, _ = interpret_model(model=base_model, X=X_test_wine, interpreter=rip)
+    interpret_model(model=base_model, X=X_test_wine, interpreter=rip)
     assert (rip.base_model) and (not rip.ruleset_.isuniversal()) and (not rip.ruleset_.isnull())
     rip.predict(X_test)
 
@@ -71,11 +71,32 @@ def test_interpret_svc():
     svc.fit(X_train, y_train)
 
     irep = IREP(random_state=42)
-    _, fidelity = interpret_model(model=svc, X=X_test, interpreter=irep)
+    interpret_model(model=svc, X=X_test, interpreter=irep)
     assert sum(irep.predict(X_test)) == 18
-    assert fidelity > .8
 
     rip = RIPPER(random_state=42)
-    _, fidelity = interpret_model(model=svc, X=X_test, interpreter=rip)
+    interpret_model(model=svc, X=X_test, interpreter=rip)
     assert sum(rip.predict(X_test)) == 22
-    assert fidelity > .8
+
+
+def test_score_fidelity():
+    svc = SVC(kernel='rbf', random_state=42)
+    svc.fit(X_train, y_train)
+
+    irep = IREP(random_state=42)
+    interpret_model(model=svc, X=X_test, interpreter=irep)
+    score = score_fidelity(
+        X_test,
+        irep,
+        model=svc,
+        score_function=[precision_score, recall_score, f1_score])
+    assert all([sc > 0.5 for sc in score])
+
+    rip = RIPPER(random_state=42)
+    interpret_model(model=svc, X=X_test, interpreter=rip)
+    score = score_fidelity(
+        X_test,
+        rip,
+        model=svc,
+        score_function=[precision_score, recall_score, f1_score])
+    assert all([sc > 0.5 for sc in score])
