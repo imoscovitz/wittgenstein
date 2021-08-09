@@ -179,7 +179,7 @@ To specify a starting point for training, use `initial_model` when calling `fit`
 Expected string syntax for a Ruleset is `[<Rule1> V <Rule2> V ...]`, for a Rule `[<Cond1>^<Cond2>^...], and for a Cond `feature=value`. '^' represents 'and'; 'V' represents 'or'. (See the [Training](https://github.com/imoscovitz/wittgenstein#training) section above).
 
 ### Interpreter models
-Use the interpret module to interpret non-wittgenstein models. `interpret_model` generates a ruleset that approximates some black-box model. It does to by fitting a wittgenstein classifier to the predictions of the other model. 
+Use the interpret module to interpret non-wittgenstein models. `interpret_model` generates a ruleset that approximates some black-box model. It does to by fitting a wittgenstein classifier to the predictions of the other model.
 ```python
 # Train the model we want to interpret
 >>> from tensorflow.keras import Sequential
@@ -244,7 +244,7 @@ Contributions are welcome! If you are interested in contributing, let me know at
 
 ## Changelog
 
-#### v0.3.0: 8/8/2021
+#### v0.3.2: 8/8/2021
 - Speedup for binning continuous features (~several orders of magnitude)
 - Add support for expert feedback: Ability to explicitly specify and alter models.
 - Add surrogate interpreter
