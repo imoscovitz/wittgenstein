@@ -7,9 +7,9 @@ _And is there not also the case where we play and--make up the rules as we go al
 
 ## Summary
 
-This package implements two interpretable coverage-based ruleset algorithms: IREP and RIPPERk, plus additional features for model interpretation.
+This package implements two interpretable coverage-based ruleset algorithms: IREP and RIPPERk plus additional features for model interpretation.
 
-Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/ruleset/blob/master/Performance%20Tests.ipynb)).
+Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/wittgenstein/blob/master/examples/performance_tests.ipynb)).
 
 For explanation of the algorithms, see my article in _Towards Data Science_, or the papers below, under [Useful References](https://github.com/imoscovitz/wittgenstein#useful-references).
 
