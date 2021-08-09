@@ -146,63 +146,6 @@ def test_replace_rule():
     )
 
 
-def test_save_load_csv():
-    csv_filename = "temp_test_sme.py_test_save_load.csv"
-    rip = credit_rip.copy()
-    rip.remove_rule_at(1)
-    rip.remove_rule_at(1)
-    rip.add_rule("[A8=-2.5--1.2]")
-    # Make sure set up works:
-    assert rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t^A10=t^A14=0] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000] V [A8=-2.5--1.2]]"
-    )
-    # Save
-    rip.to_csv(csv_filename)
-    loaded_rip = RIPPER(random_state=42)
-    # Load
-    loaded_rip.from_csv(
-        csv_filename, class_feat=credit_class_feat, pos_class=credit_pos_class
-    )
-    os.remove(csv_filename)
-    assert loaded_rip.ruleset_ == rip.ruleset_
-    assert loaded_rip.bin_transformer_.bins_ == rip.bin_transformer_.bins_
-    assert loaded_rip.bin_transformer_.n_discretize_bins == 10
-    assert loaded_rip.bin_transformer_.names_precision == 1
-    assert loaded_rip.bin_transformer_.verbosity == 0
-    assert loaded_rip.class_feat == credit_class_feat
-    assert loaded_rip.pos_class == credit_pos_class
-
-
-def test_save_load_txt():
-    txt_filename = "temp_test_sme.py_test_save_load.txt"
-    rip = credit_rip.copy()
-    rip.remove_rule_at(1)
-    rip.remove_rule_at(1)
-    rip.add_rule("[A8=-2.5--1.2]")
-    # Make sure set up works:
-    assert rip.ruleset_ == ruleset_fromstr(
-        "[[A9=t^A10=t^A14=0] V [A9=t^A10=t] V [A9=t^A7=h^A6=q] V [A9=t^A14=0^A4=u] V [A9=t^A15=4607-100000] V [A8=-2.5--1.2]]"
-    )
-    # Save
-    rip.to_txt(txt_filename)
-    loaded_rip = RIPPER(random_state=42)
-    # Load
-    loaded_rip.from_txt(
-        txt_filename, class_feat=credit_class_feat, pos_class=credit_pos_class
-    )
-    os.remove(txt_filename)
-    assert loaded_rip.ruleset_ == rip.ruleset_
-    assert loaded_rip.bin_transformer_.bins_ == {
-        "A11": [("7", "16")],
-        "A8": [("-2.5", "-1.2")],
-    }
-    assert loaded_rip.bin_transformer_.n_discretize_bins == 10
-    assert loaded_rip.bin_transformer_.names_precision == 1
-    assert loaded_rip.bin_transformer_.verbosity == 0
-    assert loaded_rip.class_feat == credit_class_feat
-    assert loaded_rip.pos_class == credit_pos_class
-
-
 def test_use_initial_model():
 
     initial_model = "[[A9=t^A6=w] ^ [hello=world]]"
