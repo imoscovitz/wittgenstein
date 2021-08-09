@@ -207,8 +207,6 @@ class RIPPER(AbstractRulesetClassifier):
         pos_df = pos_df.drop(self.class_feat, axis=1)
         neg_df = neg_df.drop(self.class_feat, axis=1)
 
-        
-
         ###############################
         # Stage 1: Grow initial Ruleset
         ###############################
@@ -1082,7 +1080,7 @@ class RIPPER(AbstractRulesetClassifier):
                 neg_remaining,
                 initial_model=self.ruleset_,
                 prune_size=self.prune_size,
-                dl_allowance    =self.dl_allowance,
+                dl_allowance=self.dl_allowance,
                 max_rules=max_rules,
                 max_rule_conds=max_rule_conds,
                 max_total_conds=max_total_conds,
@@ -1141,8 +1139,6 @@ class RIPPER(AbstractRulesetClassifier):
             # if parameter in self.VALID_HYPERPARAMETERS:
             setattr(self, parameter, value)
         return self
-
-
 
 
 ###################################

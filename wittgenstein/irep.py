@@ -188,9 +188,13 @@ class IREP(AbstractRulesetClassifier):
         if self.verbosity >= 1:
             print("\ntraining Ruleset...")
         if not cn_optimize:
-            self.ruleset_ = self._grow_ruleset(pos_df, neg_df, initial_model=initial_model)
+            self.ruleset_ = self._grow_ruleset(
+                pos_df, neg_df, initial_model=initial_model
+            )
         else:
-            self.ruleset_ = self._grow_ruleset_cn(pos_df, neg_df, initial_model=initial_model)
+            self.ruleset_ = self._grow_ruleset_cn(
+                pos_df, neg_df, initial_model=initial_model
+            )
 
         if self.verbosity >= 1:
             print("\nGREW RULESET:")
@@ -205,10 +209,7 @@ class IREP(AbstractRulesetClassifier):
 
         # FIT PROBAS
         self.recalibrate_proba(
-            df,
-            min_samples=None,
-            require_min_samples=False,
-            discretize=False,
+            df, min_samples=None, require_min_samples=False, discretize=False,
         )
 
         # CLEANUP
@@ -218,7 +219,7 @@ class IREP(AbstractRulesetClassifier):
         self.ruleset_.rules = utils.remove_duplicates(self.ruleset_.rules)
         self.ruleset_.trim_conds(max_total_conds=self.max_total_conds)
         if cn_optimize:
-            del(self.cn)
+            del self.cn
 
     def _grow_ruleset(self, pos_df, neg_df, initial_model=None):
         """Grow a Ruleset with (optional) pruning."""

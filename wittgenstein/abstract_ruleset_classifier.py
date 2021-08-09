@@ -58,7 +58,11 @@ class AbstractRulesetClassifier(ABC):
 
     def __str__(self):
         """Return string representation."""
-        isfit_str = " with fit ruleset" if (hasattr(self, "ruleset_") and self.ruleset_ is not None) else ""
+        isfit_str = (
+            " with fit ruleset"
+            if (hasattr(self, "ruleset_") and self.ruleset_ is not None)
+            else ""
+        )
         params = str(self.get_params())
         params = (
             params.replace(": ", "=")
@@ -303,7 +307,9 @@ class AbstractRulesetClassifier(ABC):
         elif isinstance(model, AbstractRulesetClassifier):
             return deepcopy(model.ruleset_)
         else:
-            raise AttributeError(f"Couldnt recognize type: {type(model)} of model: {model}. Model should be of type Ruleset, str defining a ruleset, or wittgenstein classifier.")
+            raise AttributeError(
+                f"Couldnt recognize type: {type(model)} of model: {model}. Model should be of type Ruleset, str defining a ruleset, or wittgenstein classifier."
+            )
 
     def _ensure_has_bin_transformer(self):
         if hasattr(self, "bin_transformer_") and self.bin_transformer_ is not None:

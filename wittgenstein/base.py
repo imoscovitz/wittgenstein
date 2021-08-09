@@ -60,7 +60,9 @@ class Ruleset:
 
     def __eq__(self, other):
         if type(other) != Ruleset:
-            raise TypeError(f"Ruleset.__eq__: param 'other': {other} of type {type(other)} should be type Ruleset")
+            raise TypeError(
+                f"Ruleset.__eq__: param 'other': {other} of type {type(other)} should be type Ruleset"
+            )
 
         for r in self.rules:
             # TODO: Ideally, should implement a hash function--in practice speedup would be insignificant
@@ -154,7 +156,8 @@ class Ruleset:
         # Used in Rule::successors so as not to rebuild it each time,
         # and in exceptions_dl calculations because nCr portion of formula already accounts for no replacement.)
 
-        if not hasattr(self, "possible_conds"): self.possible_conds = []
+        if not hasattr(self, "possible_conds"):
+            self.possible_conds = []
         for feat in pos_df.columns.values:
             for val in set(pos_df[feat].unique()).intersection(
                 set(neg_df[feat].unique()) - set(self.possible_conds)
@@ -543,9 +546,9 @@ def asruleset(obj):
         return obj
     elif type(obj) == str:
         return ruleset_fromstr(obj)
-    elif hasattr(obj, 'ruleset_'):
+    elif hasattr(obj, "ruleset_"):
         return obj.ruleset_
-    elif hasattr(obj, 'fit') and 'wittgenstein' in str(obj.__class__):
+    elif hasattr(obj, "fit") and "wittgenstein" in str(obj.__class__):
         return Ruleset()
     elif obj is None or not obj:
         return Ruleset()

@@ -18,7 +18,7 @@ def remove_duplicates(list_):
     i = 0
     while i < len(res):
         if res[i] in encountered:
-            del(res[i])
+            del res[i]
         else:
             encountered.add(res[i])
             i += 1

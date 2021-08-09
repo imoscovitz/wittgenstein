@@ -41,6 +41,7 @@ def interpret_model(
     interpreter.base_model = model
     return interpreter.ruleset_
 
+
 def score_fidelity(
     X,
     interpreter,
@@ -71,14 +72,12 @@ def score_fidelity(
     score or list of scores"""
 
     if model is None and model_preds is None:
-        raise ValueError(
-            f"score_fidelity: You must pass a model or model predictions"
-        )
+        raise ValueError(f"score_fidelity: You must pass a model or model predictions")
     elif model_preds is None:
         model_preds = utils.try_np_tonum(
             model_predict(X, model, model_predict_function=model_predict_function)
         )
-    if not hasattr(score_function, '__iter__'):
+    if not hasattr(score_function, "__iter__"):
         return interpreter.score(X, model_preds, score_function)
     else:
         return [interpreter.score(X, model_preds, func) for func in score_function]
@@ -120,6 +119,7 @@ def _wittgenstein_predict(X, model):
 
 def _inpackage(model, str_):
     return str_ in str(type(model))
+
 
 def _score_model(
     X, y, model, score_function=score_accuracy, model_predict_function=None

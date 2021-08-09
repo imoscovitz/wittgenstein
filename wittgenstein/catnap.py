@@ -65,7 +65,9 @@ class CatNap:
 
     def rule_covers(self, rule, subset=None):
         if rule.conds:
-            covered = set.intersection(*[self.cond_maps.get(c, set()) for c in rule.conds])
+            covered = set.intersection(
+                *[self.cond_maps.get(c, set()) for c in rule.conds]
+            )
             return covered if subset is None else covered.intersection(subset)
         else:
             return self.all if subset is None else self.all.intersection(subset)
@@ -80,14 +82,18 @@ class CatNap:
             return (
                 set.union(
                     *[
-                        set.intersection(*[self.cond_maps.get(c, set()) for c in r.conds])
+                        set.intersection(
+                            *[self.cond_maps.get(c, set()) for c in r.conds]
+                        )
                         for r in ruleset
                     ]
                 )
                 if subset is None
                 else set.union(
                     *[
-                        set.intersection(*[self.cond_maps.get(c, set()) for c in r.conds])
+                        set.intersection(
+                            *[self.cond_maps.get(c, set()) for c in r.conds]
+                        )
                         for r in ruleset
                     ]
                 ).intersection(subset)

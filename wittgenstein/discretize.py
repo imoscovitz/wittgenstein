@@ -65,31 +65,33 @@ class BinTransformer:
             if len(df) == 0:
                 return []
 
-            n_discretize_bins = min(
-                self.n_discretize_bins, len(df[feat].unique())
-            )
+            n_discretize_bins = min(self.n_discretize_bins, len(df[feat].unique()))
 
             # Collect intervals
             bins = pd.qcut(
                 df[feat],
                 q=self.n_discretize_bins,
                 precision=self.names_precision,
-                duplicates='drop')
-            if len(bins.unique()) < 2: # qcut can behave weirdly in heavily-skewed distributions
+                duplicates="drop",
+            )
+            if (
+                len(bins.unique()) < 2
+            ):  # qcut can behave weirdly in heavily-skewed distributions
                 bins = pd.cut(
                     df[feat],
                     bins=self.n_discretize_bins,
                     precision=self.names_precision,
-                    duplicates='drop')
+                    duplicates="drop",
+                )
 
             # Drop empty bins and duplicate intervals to create bins
             bin_counts = bins.value_counts()
-            bins = bin_counts[bin_counts>0].index
+            bins = bin_counts[bin_counts > 0].index
             bins = sorted(bins.unique())
 
             # Extend min/max to -inf, +inf to capture any ranges not present in training set
-            bins[0] = pd.Interval(float('-inf'), bins[0].right)
-            bins[-1] = pd.Interval(bins[-1].left, float('inf'))
+            bins[0] = pd.Interval(float("-inf"), bins[0].right)
+            bins[-1] = pd.Interval(bins[-1].left, float("inf"))
             bins = self._intervals_to_strs(bins)
 
             if self.verbosity >= 3:
@@ -123,7 +125,9 @@ class BinTransformer:
             res = deepcopy(df[feat])
             bins = self._strs_to_intervals(self.bins_[feat])
             res = pd.cut(df[feat], bins=pd.IntervalIndex(bins))
-            res = res.map(lambda x: {i:s for i,s in zip(bins, self.bins_[feat])}.get(x))
+            res = res.map(
+                lambda x: {i: s for i, s in zip(bins, self.bins_[feat])}.get(x)
+            )
             return res
 
         # Exclude any feats already transformed into valid intervals
@@ -166,19 +170,19 @@ class BinTransformer:
         return [self._interval_to_str(interval) for interval in intervals]
 
     def _interval_to_str(self, interval):
-        if interval.left == float('-inf'):
-            return f'<{interval.right}'
-        elif interval.right == float('inf'):
-            return f'>{interval.left}'
+        if interval.left == float("-inf"):
+            return f"<{interval.right}"
+        elif interval.right == float("inf"):
+            return f">{interval.left}"
         else:
-            return f'{interval.left}-{interval.right}'
+            return f"{interval.left}-{interval.right}"
 
     def _str_to_floor_ceil(self, value):
-        """Find min, max separated by a dash"""#. Return None if invalid pattern."""
-        if '<' in value:
-            floor, ceil = '-inf', value.replace('<','')
-        elif '>' in value:
-            floor, ceil = value.replace('>',''), 'inf'
+        """Find min, max separated by a dash"""  # . Return None if invalid pattern."""
+        if "<" in value:
+            floor, ceil = "-inf", value.replace("<", "")
+        elif ">" in value:
+            floor, ceil = value.replace(">", ""), "inf"
         else:
             split_idx = 0
             for i, char in enumerate(value):
@@ -198,9 +202,13 @@ class BinTransformer:
 
         bt = BinTransformer()
         bt.bins_ = self._bin_prediscretized_features(ruleset)
-        bt.n_discretize_bins = max(
-            (MIN_N_DISCRETIZED_BINS, max([len(bins) for bins in bt.bins_.values()]))
-        ) if bt.bins_ else MIN_N_DISCRETIZED_BINS
+        bt.n_discretize_bins = (
+            max(
+                (MIN_N_DISCRETIZED_BINS, max([len(bins) for bins in bt.bins_.values()]))
+            )
+            if bt.bins_
+            else MIN_N_DISCRETIZED_BINS
+        )
         bt.names_precision = self._max_dec_precision(bt.bins_)
         return bt
 
@@ -260,14 +268,17 @@ class BinTransformer:
     def _find_transformed(self, df, raise_invalid=True):
         """Find columns that appear to have already been transformed. Raise error if there is a range that doesn't match a fit bin."""
 
-        check_feats = df.select_dtypes(include=['category', 'object']).columns.tolist()
+        check_feats = df.select_dtypes(include=["category", "object"]).columns.tolist()
         invalid_feats = {}
         transformed_feats = []
         for feat, bins in self.bins_.items():
             if feat in check_feats:
                 transformed_feats.append(feat)
                 invalid_values = set(df[feat].tolist()) - set(bins)
-                if invalid_values: invalid_feats[feat] = invalid_values
+                if invalid_values:
+                    invalid_feats[feat] = invalid_values
         if invalid_feats and raise_invalid:
-            raise ValueError(f"The following input values seem to be transformed but ranges don't match fit bins: {invalid_feats}")
+            raise ValueError(
+                f"The following input values seem to be transformed but ranges don't match fit bins: {invalid_feats}"
+            )
         return transformed_feats
