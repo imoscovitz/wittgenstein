@@ -7,7 +7,7 @@ _And is there not also the case where we play and--make up the rules as we go al
 
 ## Summary
 
-This package implements two interpretable coverage-based ruleset algorithms: IREP and RIPPERk plus additional features for model interpretation.
+This package implements two interpretable coverage-based ruleset algorithms: IREP and RIPPERk, as well as additional features for model interpretation.
 
 Performance is similar to sklearn's DecisionTree CART implementation (see [Performance Tests](https://github.com/imoscovitz/wittgenstein/blob/master/examples/performance_tests.ipynb)).
 
@@ -155,6 +155,7 @@ You can directly specify a new model, modify a preexisting model, or train from 
 
 To specify a new model, use `init_ruleset`:
 ```python
+>>> ripper_clf = RIPPER(random_state=42)
 >>> ripper_clf.init_ruleset("[[Cap-shape=x^Cap-color=n] V [Odor=c] V ...]", class_feat=..., pos_class=...)
 >>> ripper_clf.predict(df)
 ...
@@ -171,14 +172,14 @@ To modify a preexisting model, use `add_rule`, `replace_rule`, `remove_rule`, or
 To specify a starting point for training, use `initial_model` when calling `fit`:
 ```python
 >>> ripper_clf.fit(
->>> X_train,
->>> y_train,
->>> initial_model="[[delicious=y^spooky-looking=y] V [Odor=c]]")
+>>>   X_train,
+>>>   y_train,
+>>>   initial_model="[[delicious=y^spooky-looking=y] V [Odor=c]]")
 ```
 Expected string syntax for a Ruleset is `[<Rule1> V <Rule2> V ...]`, for a Rule `[<Cond1>^<Cond2>^...], and for a Cond `feature=value`. '^' represents 'and'; 'V' represents 'or'. (See the [Training](https://github.com/imoscovitz/wittgenstein#training) section above).
 
 ### Interpreter models
-Use the interpret module to interpret non-wittgenstein models. `interpret_model` fits a wittgenstein classifier to another model.
+Use the interpret module to interpret non-wittgenstein models. `interpret_model` generates a ruleset that approximates some black-box model. It does to by fitting a wittgenstein classifier to the predictions of the other model. 
 ```python
 # Train the model we want to interpret
 >>> from tensorflow.keras import Sequential
