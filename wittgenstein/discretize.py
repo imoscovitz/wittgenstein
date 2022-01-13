@@ -187,7 +187,7 @@ class BinTransformer:
             split_idx = 0
             for i, char in enumerate(value):
                 # Found a possible split and it's not the first number's minus sign
-                if char == "-" and i != 0:
+                if char == "-" and i != 0 and value[i-1] != 'e':
                     if split_idx is not None and not split_idx:
                         split_idx = i
                     # Found a - after the split, and it's not the minus of a negative number
