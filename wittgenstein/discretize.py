@@ -8,7 +8,7 @@ import pandas as pd
 
 from wittgenstein.base_functions import truncstr
 from wittgenstein.utils import rnd
-
+from wittgenstein.check import _warn, is_valid_decimal
 
 class BinTransformer:
     def __init__(self, n_discretize_bins=10, names_precision=2, verbosity=0):
@@ -123,7 +123,7 @@ class BinTransformer:
                 return df
 
             res = deepcopy(df[feat])
-            bins = self._strs_to_intervals(self.bins_[feat])
+            bins = self._strs_to_intervals(self.bins_[feat], feat)
             res = pd.cut(df[feat], bins=pd.IntervalIndex(bins))
             res = res.map(
                 lambda x: {i: s for i, s in zip(bins, self.bins_[feat])}.get(x)
@@ -158,11 +158,11 @@ class BinTransformer:
 
         return cont_feats
 
-    def _strs_to_intervals(self, strs):
-        return [self._str_to_interval(s) for s in strs]
+    def _strs_to_intervals(self, strs, feat):
+        return [self._str_to_interval(s, feat) for s in strs]
 
-    def _str_to_interval(self, s):
-        floor, ceil = self._str_to_floor_ceil(s)
+    def _str_to_interval(self, s, feat):
+        floor, ceil = self._str_to_floor_ceil(s, feat)
         return pd.Interval(floor, ceil)
 
     def _intervals_to_strs(self, intervals):
@@ -175,27 +175,47 @@ class BinTransformer:
         elif interval.right == float("inf"):
             return f">{interval.left}"
         else:
-            return f"{interval.left}-{interval.right}"
+            return f"{interval.left} - {interval.right}"
 
-    def _str_to_floor_ceil(self, value):
+    def _str_to_floor_ceil(self, value, feat):
         """Find min, max separated by a dash"""  # . Return None if invalid pattern."""
         if "<" in value:
             floor, ceil = "-inf", value.replace("<", "")
         elif ">" in value:
             floor, ceil = value.replace(">", ""), "inf"
         else:
-            split_idx = 0
-            for i, char in enumerate(value):
-                # Found a possible split and it's not the first number's minus sign
-                if char == "-" and i != 0:
-                    if split_idx is not None and not split_idx:
-                        split_idx = i
-                    # Found a - after the split, and it's not the minus of a negative number
-                    elif i > split_idx + 1:
-                        return None
+            floor, ceil = self.find_floor_ceil(value, feat)
+        return float(floor), float(ceil)
+
+    def find_floor_ceil(self, value, feat):
+        """find min, max separated by a dash. Return None if invalid pattern."""
+        # try new method
+        splits = value.split(' - ')
+        if len(splits) == 2:
+            return splits[0], splits[1]
+
+        dashes = []
+        for i, char in enumerate(value):
+            # Found a possible split and it's not the first number's minus sign
+            if char == "-" and i != 0:
+                dashes.append(i)
+        if len(dashes) > 1:
+            print(feat, value, dashes)
+            dashes = [idx for idx in dashes if not self._maybeexp_idx(value, idx)]
+        elif len(dashes) == 1:
+            split_idx = dashes[0]
             floor = value[:split_idx]
             ceil = value[split_idx + 1 :]
-        return float(floor), float(ceil)
+        else:
+            print('dashes', dashes)
+            _warn(f"{dashes} there was a problem parsing range in string {value} feature {feat}", RuntimeWarning, 'discretize', 'find_floor_ceil')
+            return None
+        if is_valid_decimal(floor) and is_valid_decimal(ceil):
+            return (floor, ceil)
+        else:
+            print('dashes', dashes)
+            _warn(f"{dashes} there was a problem parsing range in string {value} feature {feat}. {floor} or {ceil} isn't parsable as a float.", RuntimeWarning, 'discretize', 'find_floor_ceil')
+            return None
 
     def construct_from_ruleset(self, ruleset):
         MIN_N_DISCRETIZED_BINS = 10
@@ -213,33 +233,6 @@ class BinTransformer:
         return bt
 
     def _bin_prediscretized_features(self, ruleset):
-        def is_valid_decimal(s):
-            try:
-                float(s)
-            except:
-                return False
-            return True
-
-        def find_floor_ceil(value):
-            """id min, max separated by a dash. Return None if invalid pattern."""
-            split_idx = 0
-            for i, char in enumerate(value):
-                # Found a possible split and it's not the first number's minus sign
-                if char == "-" and i != 0:
-                    if split_idx is not None and not split_idx:
-                        split_idx = i
-                    # Found a - after the split, and it's not the minus of a negative number
-                    elif i > split_idx + 1:
-                        return None
-
-            floor = value[:split_idx]
-            ceil = value[split_idx + 1 :]
-            if is_valid_decimal(floor) and is_valid_decimal(ceil):
-                return (floor, ceil)
-            else:
-                return None
-
-        # _bin_prediscretized_features
         discrete = defaultdict(list)
         for cond in ruleset.get_conds():
             floor_ceil = self.find_floor_ceil(cond.val)
@@ -282,3 +275,11 @@ class BinTransformer:
                 f"The following input values seem to be transformed but ranges don't match fit bins: {invalid_feats}"
             )
         return transformed_feats
+
+    def _maybeexp_idx(self, s, idx):
+        """Is idx a possible exponent dash?"""
+        if s[idx] != '-' or idx <= 1 or idx >= len(s)-1:
+            return False
+        if s[idx-1] == 'e' and s[idx-2].isnumeric() and s[idx+1].isnumeric():
+            return True
+        return False
