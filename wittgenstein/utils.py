@@ -79,3 +79,8 @@ def weighted_avg_freqs(counts):
     arr = np.array(counts)
     total = arr.flatten().sum()
     return arr.sum(axis=0) / total if total else arr.sum(axis=0)
+
+
+def min_max_smooth(array):
+    _SMOOTH_MIN = .001
+    return np.clip(array, _SMOOTH_MIN, 1-_SMOOTH_MIN)
