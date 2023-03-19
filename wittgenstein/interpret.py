@@ -37,7 +37,7 @@ def interpret_model(
     model_preds = utils.try_np_tonum(
         model_predict(X, model, model_predict_function=model_predict_function)
     )
-    interpreter.fit(X, model_preds)
+    interpreter.fit(trainset=X, y=model_preds)
     interpreter.base_model = model
     return interpreter.ruleset_
 
@@ -91,9 +91,9 @@ def model_predict(X, model, model_predict_function=None):
             return _sklearn_predict(X, model)
         elif _inpackage(model, "tensorflow") or _inpackage(model, "keras"):
             return _keras_predict(X, model)
-        elif inpackage(model, "torch"):
+        elif _inpackage(model, "torch"):
             return _torch_predict(X, model)
-        elif inpackage(model, "wittgenstein"):
+        elif _inpackage(model, "wittgenstein"):
             return _wittgenstein_predict(X, model)
         else:
             return model.predict(X)
