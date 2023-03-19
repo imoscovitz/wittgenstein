@@ -17,7 +17,7 @@ from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .base import Cond, Rule, Ruleset, asruleset
 from .base_functions import score_accuracy
 from .catnap import CatNap
-from .check import _check_is_model_fit
+from .check import _check_is_model_fit, _check_df_allpos_allneg
 from wittgenstein import utils
 from wittgenstein.utils import rnd
 
@@ -36,6 +36,7 @@ class RIPPER(AbstractRulesetClassifier):
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        alpha=1.0,
         random_state=None,
         verbosity=0,
     ):
@@ -80,6 +81,7 @@ class RIPPER(AbstractRulesetClassifier):
             max_rules=max_rules,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
+            alpha=alpha,
             random_state=random_state,
             verbosity=verbosity,
         )
@@ -188,6 +190,8 @@ class RIPPER(AbstractRulesetClassifier):
             self.pos_class,
             self.bin_transformer_,
         ) = preprocess.preprocess_training_data(preprocess_params)
+        #print('fit')
+        #print(df.columns)
 
         # Create CatNap
         # possible minor speedup if pass cond_subset of only pos_class conds?
@@ -206,6 +210,9 @@ class RIPPER(AbstractRulesetClassifier):
         )
         pos_df = pos_df.drop(self.class_feat, axis=1)
         neg_df = neg_df.drop(self.class_feat, axis=1)
+
+        # Warnings
+        _check_df_allpos_allneg(df, self.class_feat, self.pos_class, 'ripper', 'fit')
 
         ###############################
         # Stage 1: Grow initial Ruleset
@@ -284,7 +291,7 @@ class RIPPER(AbstractRulesetClassifier):
 
             if iter != self.k and self.ruleset_ == newset:
                 if self.verbosity >= 1:
-                    print("No changes were made. Halting optimization.")
+                    print(f"No changes were made. Halting optimization at iteration k={iter}.")
                 break
             else:
                 self.ruleset_ = newset
@@ -356,7 +363,7 @@ class RIPPER(AbstractRulesetClassifier):
 
         # Fit probas
         self.recalibrate_proba(
-            df, min_samples=None, require_min_samples=False, discretize=False
+            df, min_samples=1, require_min_samples=False, discretize=False
         )
         self.classes_ = np.array([0, 1])
 
@@ -604,7 +611,7 @@ class RIPPER(AbstractRulesetClassifier):
                 pos_pruneset_idx,
                 neg_pruneset_idx,
                 verbosity=self.verbosity,
-            )
+            ) if prune_size else grown_rule
 
             # Add rule; calculate new description length
             ruleset.add(
@@ -1194,8 +1201,8 @@ def _r_theory_bits(rule, possible_conds, bits_dict=None, verbosity=0):
         #    raise TypeError(f'param rule in _r_theory_bits is type {type(rule)}; it should be type Rule')
         k = len(rule.conds)  # Number of rule conditions
         n = len(possible_conds)  # Number of possible conditions
+        k = max(k, 1) # universal or negation rule is 1 bit
         pr = k / n
-
         S = k * math.log2(1 / pr) + (n - k) * math.log2((1 / (1 - pr)))  # S(n, k, pr)
         K = math.log2(k)  # Number bits need to send integer k
         rule_dl = 0.5 * (
@@ -1205,10 +1212,8 @@ def _r_theory_bits(rule, possible_conds, bits_dict=None, verbosity=0):
             print(
                 f"rule theory bits| {rule} k {k} n {n} pr {rnd(pr)}: {rnd(rule_dl)} bits"
             )
-
         # rule.dl = rule_dl
-        return rule_dl
-
+        return max(rule_dl, 1) # universal or negation rule is 1 bit
 
 def _rs_theory_bits(ruleset, possible_conds, verbosity=0):
     """Returns theory description length (in bits) for a Ruleset."""

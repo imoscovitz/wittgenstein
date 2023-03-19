@@ -13,7 +13,6 @@ from random import shuffle, seed
 from wittgenstein.base import Cond, Rule, Ruleset
 from wittgenstein.check import (
     _warn,
-    _warn_only_single_class,
     _check_model_features_present,
 )
 from wittgenstein.utils import rnd
@@ -267,7 +266,7 @@ def prune_rule_cn(
 
 
 def recalibrate_proba(
-    ruleset, Xy_df, class_feat, pos_class, min_samples=10, require_min_samples=True
+    ruleset, Xy_df, class_feat, pos_class, min_samples=1, require_min_samples=False, alpha=1.0, verbosity=0,
 ):
     """Recalibrate a Ruleset's probability estimations using unseen labeled data without changing the underlying model. May improve .predict_proba generalizability.
     Does not affect the underlying model or which predictions it makes -- only probability estimates. Use params min_samples and require_min_samples to select desired behavior.
@@ -289,6 +288,8 @@ def recalibrate_proba(
     require_min_samples : bool, default=True
         Halt (with warning) if any Rule lacks the minimum number of samples.
         Setting to False will warn, but still replace Rules probabilities even if the minimum number of samples is not met.
+    alpha : float, default=1.0
+        additive smoothing parameter
     """
 
     _check_model_features_present(Xy_df, ruleset.get_selected_features())
@@ -300,101 +301,105 @@ def recalibrate_proba(
     if not min_samples or min_samples < 1:
         min_samples = 1
 
-    # Collect each Rule's pos and neg frequencies in list "rule_class_freqs"
-    # Store rules that lack enough samples in list "insufficient_rules"
+    # Collect each Rule's pos and neg frequencies in rule.class_freqs
+    # Store rules that lack enough samples in insufficient_rules
     df = Xy_df
 
-    rule_class_freqs = [None] * len(ruleset.rules)
+    # Positive Predictions
     insufficient_rules = []
+    n_samples = len(df)
     for i, rule in enumerate(ruleset.rules):
-        npos_pred = num_pos(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
-        nneg_pred = num_neg(rule.covers(df), class_feat=class_feat, pos_class=pos_class)
-        neg_pos_pred = (nneg_pred, npos_pred)
-        rule_class_freqs[i] = neg_pos_pred
+        p_preds = rule.covers(df)
+        num_pos_pred = len(p_preds)
+        tp = num_pos(p_preds, class_feat=class_feat, pos_class=pos_class)
+        fp = num_pos_pred - tp
+        tpr = tp / num_pos_pred if num_pos_pred else 0
+        fpr = fp / num_pos_pred if num_pos_pred else 0
+        rule.class_ns_ = (fp, tp)
+        rule.class_freqs_ = (fpr, tpr)
+        rule.smoothed_class_freqs_ = additive_smoothed_rates((fp, tp), alpha=alpha)
+        if verbosity >= 2:
+            print('rule', i, rule)
+            print('n_samples:', n_samples, \
+                'tp:', tp, 'fp:', fp, 'tpr:', tpr, 'fpr:', fpr, \
+                'class_ns:', rule.class_ns_, 'class_freqs:', rule.class_freqs_,
+                'smoothed_class_freqs:', rule.smoothed_class_freqs_)
         # Rule has insufficient samples if fewer than minsamples or lacks at least one correct sample
-        if (
-            sum(neg_pos_pred) < min_samples
-            or sum(neg_pos_pred) < 1
-            or neg_pos_pred[0] < required_correct_samples
-        ):
+        if n_samples < min_samples or tp < required_correct_samples:
             insufficient_rules.append(rule)
 
     # Collect class frequencies for negative predictions
     uncovered = df.drop(ruleset.covers(df).index)
-    neg_freq = num_neg(uncovered, class_feat=class_feat, pos_class=pos_class)
-    tn_fn = (neg_freq, len(uncovered) - neg_freq)
+    num_neg_pred = len(uncovered)
+    tn = num_neg(uncovered, class_feat=class_feat, pos_class=pos_class)
+    fn = num_neg_pred - tn
+    tnr = tn / num_neg_pred if num_neg_pred else 0
+    fnr = fn / num_neg_pred if num_neg_pred else 0
+    ruleset.uncovered_class_ns_ = (tn, fn)
+    ruleset.uncovered_class_freqs_ = (tnr, fnr)
+    ruleset.smoothed_uncovered_class_freqs_ = additive_smoothed_rates((tn, fn), alpha=alpha)
+    if verbosity >= 2:
+        print('tn:', tn, 'fn:', fn, 'tnr:', tnr, 'fnr:', fnr, \
+              'ruleset_uncovered_class_ns:', ruleset.uncovered_class_ns_,
+              'ruleset_uncovered_class_freqs', ruleset.uncovered_class_freqs_,
+              'smoothed_uncovered_class_freqs_', ruleset.smoothed_uncovered_class_freqs_)
 
+    """
     # Issue warnings if trouble with sample size
-    if require_min_samples:
-        if insufficient_rules:  # WARN if/which rules lack enough samples
-            pretty_insufficient_rules = "\n".join([str(r) for r in insufficient_rules])
-            warning_str = f"param min_samples={min_samples}; insufficient number of samples or fewer than {required_correct_samples} correct samples for rules {pretty_insufficient_rules}"
+    sample_failure = False
+    if insufficient_rules:  # WARN if any rules lack enough samples
+        pretty_insufficient_rules = "\n".join([f'{r} class counts {sum(r.class_ns_)}' for r in insufficient_rules])
+        warning_str = f"param min_samples={min_samples}; insufficient number of samples or fewer than {required_correct_samples} true positives for rules {pretty_insufficient_rules}"
+        _warn(
+            warning_str,
+            RuntimeWarning,
+            filename="base_functions",
+            funcname="recalibrate_proba",
+        )
+        sample_failure = True
+    if num_neg(df, class_feat=class_feat, pos_class=pos_class) < min_samples:  # WARN if negative class lacks enough samples
+        warning_str = f"param min_samples={min_samples}; insufficient number of negatively labled samples"
+        _warn(
+            warning_str,
+            RuntimeWarning,
+            filename="base_functions",
+            funcname="recalibrate_proba",
+        )
+        sample_failure = True
+    if n_samples < min_samples:  # WARN if negative class lacks enough samples
+        warning_str = f"param min_samples={min_samples}; insufficient number of negatively labled samples"
+        _warn(
+            warning_str,
+            RuntimeWarning,
+            filename="base_functions",
+            funcname="recalibrate_proba",
+        )
+    if require_min_samples and sample_failure:
+            warning_str = f"Recalibrate proba halted. to recalibrate, try using more samples, lowering min_samples, or set require_min_samples to False"
             _warn(
                 warning_str,
                 RuntimeWarning,
                 filename="base_functions",
                 funcname="recalibrate_proba",
             )
-        if neg_freq < min_samples or tn_fn[1] < 1:  # WARN if neg lacks enough samples
-            warning_str = f"param min_samples={min_samples}; insufficient number of negatively labled samples"
-            _warn(
-                warning_str,
-                RuntimeWarning,
-                filename="base_functions",
-                funcname="recalibrate_proba",
-            )
-        if insufficient_rules or sum(tn_fn) < min_samples:
-            if (
-                require_min_samples
-            ):  # WARN if require_min_samples -> halting recalibration
-                warning_str = f"Recalibrating halted. to recalibrate, try using more samples, lowering min_samples, or set require_min_samples to False"
-                _warn(
-                    warning_str,
-                    RuntimeWarning,
-                    filename="base_functions",
-                    funcname="recalibrate_proba",
-                )
-                return
-            else:  # GO AHEAD EVEN THOUGH NOT ENOUGH SAMPLES
-                pass
-                # warning_str = f'Because require_min_samples=False, recalibrating probabilities for any rules with enough samples min_samples>={min_samples} that have at least {required_correct_samples} correct samples even though not all rules have enough samples. Probabilities for any rules that lack enough samples will be retained.'
-                # _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='recalibrate_proba')
+            return
+    """
 
-    # Assign collected frequencies to Rules
-    for rule, freqs in zip(ruleset.rules, rule_class_freqs):
-        if sum(freqs) >= min_samples and freqs[0] >= required_correct_samples:
-            rule.class_freqs = freqs
-        else:
-            rule.class_freqs = None
-
-    # Assign Ruleset's uncovered frequencies
-    if not hasattr(ruleset, "uncovered_class_freqs") or (
-        neg_freq >= min_samples and tn_fn[1] >= required_correct_samples
-    ):
-        ruleset.uncovered_class_freqs = tn_fn
-
-    # Warn if no neg samples
-    if (
-        sum([freqs[0] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[0]
-        == 0
-    ):
-        _warn_only_single_class(
-            only_value=1,
-            pos_class=1,
-            filename="base_functions",
-            funcname="recalibrate_proba",
-        )
-    # Warn if no pos samples
-    elif (
-        sum([freqs[1] for freqs in rule_class_freqs]) + ruleset.uncovered_class_freqs[1]
-        == 0
-    ):
-        _warn_only_single_class(
-            only_value=0,
-            pos_class=1,
-            filename="base_functions",
-            funcname="recalibrate_proba",
-        )
+def additive_smoothed_rates(counts, alpha=1.0):
+    """ counts : iterable of values
+            e.g. (2, 0)
+        alpha : float, default=1.0
+            additive smoothing parameter
+        return : iterable
+            smoothed rates e.g. (0.75, 0.25)
+    """
+    n_counts = len(counts)
+    denom = sum(counts) + (alpha * n_counts)
+    res = [((val+alpha) / denom) for val in counts]
+    #print(res)
+    #type_ = type(counts)
+    #return type_(res)
+    return res
 
     ###################
     ##### METRICS #####

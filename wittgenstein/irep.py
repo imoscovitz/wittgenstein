@@ -14,7 +14,7 @@ import pandas as pd
 
 from wittgenstein import utils, base, base_functions, preprocess
 from .catnap import CatNap
-from .check import _check_param_deprecation
+from .check import _check_param_deprecation, _check_df_allpos_allneg
 from .abstract_ruleset_classifier import AbstractRulesetClassifier
 from .base import Cond, Rule, Ruleset, asruleset
 from .base_functions import score_accuracy, stop_early
@@ -30,6 +30,7 @@ class IREP(AbstractRulesetClassifier):
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        alpha=1.0,
         random_state=None,
         verbosity=0,
     ):
@@ -69,6 +70,7 @@ class IREP(AbstractRulesetClassifier):
             max_rules=max_rules,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
+            alpha=alpha,
             random_state=random_state,
             verbosity=verbosity,
         )
@@ -184,6 +186,9 @@ class IREP(AbstractRulesetClassifier):
         pos_df = pos_df.drop(self.class_feat, axis=1)
         neg_df = neg_df.drop(self.class_feat, axis=1)
 
+        # Warnings
+        _check_df_allpos_allneg(df, self.class_feat, self.pos_class, 'irep', 'fit')
+
         # TRAINING
         if self.verbosity >= 1:
             print("\ntraining Ruleset...")
@@ -209,7 +214,7 @@ class IREP(AbstractRulesetClassifier):
 
         # FIT PROBAS
         self.recalibrate_proba(
-            df, min_samples=None, require_min_samples=False, discretize=False,
+            df, min_samples=1, require_min_samples=False, discretize=False
         )
 
         # CLEANUP
@@ -409,6 +414,7 @@ class IREP(AbstractRulesetClassifier):
                 prune_precision = base_functions.rule_precision_cn(
                     self.cn, pruned_rule, pos_pruneset_idx, neg_pruneset_idx
                 )
+                print('prune_precision for rule', pruned_rule, prune_precision)
                 if not prune_precision or prune_precision < 0.50:
                     break
                 # Otherwise, add new Rule, remove covered examples, and continue

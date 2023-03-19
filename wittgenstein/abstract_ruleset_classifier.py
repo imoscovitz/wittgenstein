@@ -30,6 +30,7 @@ class AbstractRulesetClassifier(ABC):
         max_rules=None,
         max_rule_conds=None,
         max_total_conds=None,
+        alpha=1.0,
         random_state=None,
         verbosity=0,
     ):
@@ -41,15 +42,17 @@ class AbstractRulesetClassifier(ABC):
             "max_rules",
             "max_rule_conds",
             "max_total_conds",
+            "alpha",
             "random_state",
             "verbosity",
         }
         self.algorithm_name = algorithm_name
-        self.prune_size = prune_size
+        self.prune_size = prune_size if prune_size else 0
         self.n_discretize_bins = n_discretize_bins
         self.max_rules = max_rules
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
+        self.alpha = alpha
         self.random_state = random_state
         self.verbosity = verbosity
 
@@ -199,7 +202,6 @@ class AbstractRulesetClassifier(ABC):
         # This is to help keep sklearn ensemble happy should someone want use it
         # self.classes_ = np.array([0, 1])
         self.classes_ = np.array([f"not {self.pos_class}", self.pos_class])
-
         return self.ruleset_.predict_proba(X_df, give_reasons=give_reasons)
 
     def recalibrate_proba(
@@ -253,6 +255,8 @@ class AbstractRulesetClassifier(ABC):
             pos_class=self.pos_class,
             min_samples=min_samples,
             require_min_samples=require_min_samples,
+            alpha=self.alpha,
+            verbosity=self.verbosity
         )
 
     def copy(self):

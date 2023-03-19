@@ -3,9 +3,9 @@
 # License: MIT
 
 import math
-
 import numpy as np
 from numpy import var, mean
+import pandas as pd
 
 from wittgenstein.check import (
     _warn,
@@ -94,7 +94,7 @@ class Ruleset:
     def isuniversal(self):
         """Return whether the Ruleset has an empty rule, i.e. it will always return positive predictions."""
         if len(self.rules) >= 1:
-            return all(rule.isempty() for rule in self.rules)
+            return any(rule.isempty() for rule in self.rules)
         else:
             return False
 
@@ -122,11 +122,16 @@ class Ruleset:
         elif self.isnull():
             return df.head(0)
         else:
-            covered = self.rules[0].covers(df).copy()
-            for rule in self.rules[1:]:
-                covered = covered.append(rule.covers(df))
-            covered = covered.drop_duplicates()
+            covered = []
+            for rule in self.rules:
+                covered.append(rule.covers(df).copy())
+            covered = pd.concat(covered)
             return covered
+            #covered = self.rules[0].covers(df).copy()
+            #for rule in self.rules[1:]:
+            #    covered = covered.append(rule.covers(df))
+            #covered = covered.drop_duplicates()
+            #return covered
 
     def num_covered(self, df):
         """Return the number of covered examples."""
@@ -269,34 +274,19 @@ class Ruleset:
         """
 
         # Get proba for all negative predictions
-        uncovered_proba = weighted_avg_freqs([self.uncovered_class_freqs])
+        uncovered_proba = weighted_avg_freqs([self.smoothed_uncovered_class_freqs_])
 
         # Make predictions for each example
         predictions, covering_rules = self.predict(X_df, give_reasons=True, warn=False)
 
-        # Calculate probas for each example
-        invalid_example_idx = []
+        # Collect probas for each example
         probas = np.empty(shape=(len(predictions), uncovered_proba.shape[0]))
         for i, (p, cr) in enumerate(zip(predictions, covering_rules)):
             if not p:
                 probas[i, :] = uncovered_proba
             else:
-                # Make sure only using rules that had enough samples to record
-                valid_class_freqs = [
-                    rule.class_freqs for rule in cr if rule.class_freqs is not None
-                ]
-                if valid_class_freqs:
-                    probas[i, :] = weighted_avg_freqs(valid_class_freqs)
-                else:
-                    probas[i, :] = 0
-                    invalid_example_idx.append(i)
-
-        # Warn if any examples didn't have large enough sample size of any rules
-        if invalid_example_idx:
-            warning_str = f"Some examples lacked any rule with sufficient sample size to predict_proba: {invalid_example_idx}\n Consider running recalibrate_proba with smaller param min_samples, or set require_min_samples=False"
-            _warn(
-                warning_str, RuntimeWarning, filename="base", funcname="predict_proba",
-            )
+                class_freqs = [rule.smoothed_class_freqs_ for rule in cr]
+                probas[i, :] = weighted_avg_freqs(class_freqs)
         # return probas (and optional extras)
         result = utils.flagged_return([True, give_reasons], [probas, covering_rules])
         return result
