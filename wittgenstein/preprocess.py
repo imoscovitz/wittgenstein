@@ -265,14 +265,14 @@ def _get_pos_class(df, class_feat, pos_class):
 
     def raise_fail_infer_pos_class():
         raise NameError(
-            f"Couldn't infer name of positive target class from class feature: {class_feat}. Try using parameter pos_class to specify which class label should be treated as positive, or renaming your classes as booleans or 0, 1."
+            f"Couldn't infer name of positive target class from class feature: {class_feat}. Try using parameter pos_class to specify which class label should be treated as positive, or try renaming your classes as booleans or 0, 1."
         )
 
     # pos class is already known
     if pos_class is not None:
         return pos_class
 
-    # Check if pos class can be inferred as True or 1
+    # Check if pos class can be inferred
     class_values = df[class_feat].unique()
 
     # More than two classes
@@ -282,10 +282,10 @@ def _get_pos_class(df, class_feat, pos_class):
     # Only one class
     elif len(class_values) == 1:
         only_value = utils.try_np_tonum(class_values[0])
-        if only_value is 0:
-            pos_class = 1
-        elif only_value is False:
+        if isinstance(only_value, bool) and only_value == False:
             pos_class = True
+        elif only_value == 0:
+            pos_class = 1
         else:
             pos_class = only_value
         _warn_only_single_class(
@@ -296,14 +296,14 @@ def _get_pos_class(df, class_feat, pos_class):
         )
         return pos_class
 
-    # Exactly two class. Check if they are 01 or TrueFalse
+    # Exactly two class. Check if they are True/False or 0/1
     else:
         class_values.sort()
         class_values = [utils.try_np_tonum(val) for val in class_values]
-        if class_values[0] is 0 and class_values[1] is 1:
-            return 1
-        elif class_values[0] is False and class_values[1] is True:
+        if isinstance(class_values[0], bool) and class_values[0] == False and class_values[1] == True:
             return True
+        elif class_values[0] == 0 and class_values[1] == 1:
+            return 1
 
     # Can't infer classes
     raise_fail_infer_pos_class()
