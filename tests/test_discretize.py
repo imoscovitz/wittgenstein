@@ -10,7 +10,7 @@ def test_bin_ranges_are_flush():
     bin_transformer_.fit(df)
     for feat, bins in bin_transformer_.bins_.items():
         prev_ceil = None
-        for bin in bin_transformer_._strs_to_intervals(bins):
+        for bin in bin_transformer_._strs_to_intervals(bins, feat):
             floor, ceil = bin.left, bin.right
             assert prev_ceil is None or floor == prev_ceil
             prev_ceil = ceil
@@ -21,7 +21,7 @@ def test_each_bin_in_order():
     bin_transformer_ = BinTransformer()
     bin_transformer_.fit(df)
     for feat, bins in bin_transformer_.bins_.items():
-        bins = bin_transformer_._strs_to_intervals(bins)
+        bins = bin_transformer_._strs_to_intervals(bins, feat)
         assert bins == sorted(bins)
 
 
@@ -31,7 +31,7 @@ def test_boundless_min_max_bins():
     bin_transformer_.fit(df)
     for feat, bins in bin_transformer_.bins_.items():
         prev_ceil = None
-        bins = bin_transformer_._strs_to_intervals(bins)
+        bins = bin_transformer_._strs_to_intervals(bins, feat)
         assert bins[0].left == float('-inf')
         assert bins[-1].right == float('inf')
 
