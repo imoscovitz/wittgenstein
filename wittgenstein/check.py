@@ -39,16 +39,6 @@ def _check_is_model_fit(model):
             "You should fit the ruleset classifier with .fit method before making predictions with it."
         )
 
-
-# TODO: Check in fit methods before fitting
-def _check_any_pos(df, class_feat, pos_class):
-    pass
-
-
-def _check_any_neg(df, class_feat, pos_class):
-    pass
-
-
 def _check_all_of_type(iterable, type_):
     wrong_type_objects = []
     for object in iterable:
@@ -57,7 +47,6 @@ def _check_all_of_type(iterable, type_):
     if wrong_type_objects:
         wrong_info = [(object, type(object).__name__) for object in wrong_type_objects]
         raise TypeError(f"Objects must be of type {type_}: {wrong_info}")
-
 
 def _check_param_deprecation(kwargs, parameters):
     passed_parameters = []
@@ -72,16 +61,13 @@ def _check_param_deprecation(kwargs, parameters):
             "fit",
         )
 
-
 def _check_model_features_present(df, model_selected_features):
-
     df_feats = df.columns.tolist()
     missing_feats = [f for f in model_selected_features if f not in df_feats]
     if missing_feats:
         raise IndexError(
-            f"The features selected by Ruleset model need to be present in prediction dataset. Dataset provided includes: {df_feats} and is missing the selected features named: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features with same names as training set, or use parameter 'feature_names' to specify the names of prediction dataset features.\n"
+            f"The features selected by Ruleset model need to be present in prediction dataset. Provided features: {df_feats}.\nMissing features: {missing_feats}.\nEither ensure prediction dataset includes all Ruleset-selected features. If features are present under different names, you can use parameter 'feature_names'.\n"
         )
-
 
 def _warn_only_single_class(only_value, pos_class, filename, funcname):
     missing_class = "positive" if only_value != pos_class else "negative"
@@ -90,13 +76,19 @@ def _warn_only_single_class(only_value, pos_class, filename, funcname):
         warning_str, RuntimeWarning, filename=filename, funcname=funcname,
     )
 
+def _check_df_allpos_allneg(df, class_feat, pos_class, filename=None, funcname=None):
+    if not any([label==pos_class for label in df[class_feat]]):
+        warning_str = f"No positive samples. Existing target labels={df[class_feat].unique().tolist()}."
+        _warn(warning_str, RuntimeWarning, filename=filename, funcname=funcname)
+    elif all([label==pos_class for label in df[class_feat]]):
+        warning_str = f"No negative samples. Existing target labels={df[class_feat].unique().tolist()}."
+        _warn(warning_str, RuntimeWarning, filename=filename, funcname=funcname)
 
 def _check_valid_index(index, iterable, source_func):
     if index < 0 or index >= len(iterable):
         raise IndexError(
             f"{source_func}: {index} is out of range; {iterable} is of length {len(iterable)}"
         )
-
 
 def _check_rule_exists(rule, ruleset, source_func):
     for r in ruleset:
@@ -105,3 +97,10 @@ def _check_rule_exists(rule, ruleset, source_func):
     raise ValueError(
         f"{source_func}: couldn't find Rule named '{rule}' in Ruleset: '{ruleset}'"
     )
+
+def is_valid_decimal(s):
+    try:
+        float(s)
+    except:
+        return False
+    return True
