@@ -244,7 +244,7 @@ Contributions are welcome! If you are interested in contributing, let me know at
 
 ## Changelog
 
-#### v0.3.3: 4/3/2022
+#### v0.3.4: 4/3/2022
 - Improvements to predict_proba calculation, including smoothing
 
 #### v0.3.2: 8/8/2021
