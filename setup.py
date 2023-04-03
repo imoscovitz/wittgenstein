@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="wittgenstein",
-    version="0.3.2",
+    version="0.3.3",
     # license="MIT",
     description="Ruleset covering algorithms for explainable machine learning",
     long_description=open("README.md").read(),
@@ -16,6 +16,10 @@ setuptools.setup(
         "Machine Learning",
         "Explainable Machine Learning",
         "Data Science",
+        "Machine Learning Interpretability",
+        "Transparent Machine Learning",
+        "ML",
+        "Ruleset"
     ],
     packages=setuptools.find_packages(),
     install_requires=["pandas", "numpy"],
