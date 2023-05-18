@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from wittgenstein.base import Cond, Rule, Ruleset
+from wittgenstein.base import Cond, Rule, Ruleset, ruleset_fromstr
 from wittgenstein.irep import IREP
 from wittgenstein.ripper import RIPPER
 from wittgenstein import preprocess
@@ -348,3 +348,49 @@ def test_df_isnt_modified():
     rip = RIPPER(random_state=42)
     rip.fit(CREDIT_DF, class_feat=CREDIT_CLASS_FEAT, pos_class=CREDIT_POS_CLASS)
     assert df.equals(old_df)
+
+def test_max_rules():
+    irep = IREP(random_state=42, max_rules=2)
+    rip = RIPPER(random_state=42, max_rules=2)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert len(irep.ruleset_) <= 2
+
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert len(rip.ruleset_) <= 2
+
+def test_min_rule_samples():
+    irep = IREP(random_state=42, min_rule_samples=200)
+    rip = RIPPER(random_state=42, min_rule_samples=200)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert irep.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
+
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert rip.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
+
+def test_max_rule_conds():
+    irep = IREP(random_state=42, max_rule_conds=2)
+    rip = RIPPER(random_state=42, max_rule_conds=2)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert all([len(rule) <=2 for rule in irep.ruleset_])
+
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert all([len(rule) <=2 for rule in rip.ruleset_])
+
+def test_max_total_conds():
+    irep = IREP(random_state=42, max_total_conds=4)
+    rip = RIPPER(random_state=42, max_total_conds=4)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    ct = 0
+    for rule in irep.ruleset_.rules:
+        ct += len(rule.conds)
+    assert ct <= 4
+
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    ct = 0
+    for rule in rip.ruleset_.rules:
+        ct += len(rule.conds)
+    assert ct <= 4

@@ -714,8 +714,8 @@ def truncstr(iterable, limit=5, direction="left"):
         return str(iterable)
 
 
-def stop_early(ruleset, max_rules, max_total_conds):
+def stop_early(ruleset, pos_remaining, neg_remaining, max_rules, min_rule_samples, max_total_conds):
     """Function to decide whether to halt training."""
-    return (max_rules is not None and len(ruleset.rules) >= max_rules) or (
-        max_total_conds is not None and ruleset.count_conds() >= max_total_conds
-    )
+    return (max_rules is not None and len(ruleset.rules) >= max_rules) \
+        or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds) \
+        or (min_rule_samples is not None and (len(pos_remaining) + len(neg_remaining) < min_rule_samples))

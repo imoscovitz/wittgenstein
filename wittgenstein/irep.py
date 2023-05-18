@@ -28,6 +28,7 @@ class IREP(AbstractRulesetClassifier):
         prune_size=0.33,
         n_discretize_bins=10,
         max_rules=None,
+        min_rule_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         alpha=1.0,
@@ -46,6 +47,8 @@ class IREP(AbstractRulesetClassifier):
         Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
         max_rules : int, default=None
             Maximum number of rules.
+        min_rule_samples : int, default=None
+            Minimum number of samples per rule.
         max_rule_conds : int, default=None
             Maximum number of conds per rule.
         max_total_conds : int, default=None
@@ -68,6 +71,7 @@ class IREP(AbstractRulesetClassifier):
             prune_size=prune_size,
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
+            min_rule_samples=min_rule_samples,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
             alpha=alpha,
@@ -248,7 +252,8 @@ class IREP(AbstractRulesetClassifier):
         while len(pos_remaining) > 0:
 
             # If applicable, check for user-specified early stopping
-            if stop_early(ruleset, self.max_rules, self.max_total_conds):
+            if stop_early(ruleset, pos_remaining, neg_remaining,
+                self.max_rules, self.min_rule_samples, elf.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
@@ -347,7 +352,8 @@ class IREP(AbstractRulesetClassifier):
         while len(pos_remaining_idx) > 0:
 
             # If applicable, check for user-specified early stopping
-            if stop_early(ruleset, self.max_rules, self.max_total_conds):
+            if stop_early(ruleset, pos_remaining_idx, neg_remaining_idx,
+                self.max_rules, self.min_rule_samples, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
