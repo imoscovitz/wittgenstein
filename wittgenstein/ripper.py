@@ -725,7 +725,7 @@ class RIPPER(AbstractRulesetClassifier):
                 break  # Possible where optimization run > 1
 
             if stop_early(new_ruleset, pos_remaining, neg_remaining,
-                max_rules, min_rule_samples, max_total_conds):
+                self.max_rules, self.min_rule_samples, self.max_total_conds):
                 break
 
             # Create alternative rules

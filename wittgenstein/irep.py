@@ -253,7 +253,7 @@ class IREP(AbstractRulesetClassifier):
 
             # If applicable, check for user-specified early stopping
             if stop_early(ruleset, pos_remaining, neg_remaining,
-                self.max_rules, self.min_rule_samples, elf.max_total_conds):
+                self.max_rules, self.min_rule_samples, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
