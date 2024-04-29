@@ -27,6 +27,7 @@ def grow_rule(
     neg_df,
     possible_conds,
     initial_rule=Rule(),
+    min_rule_samples=None,
     max_rule_conds=None,
     verbosity=0,
 ):
@@ -37,9 +38,15 @@ def grow_rule(
         print(f"growing rule from initial rule: {rule0}")
 
     rule1 = copy.deepcopy(rule0)
-    while (len(rule0.covers(neg_df)) > 0 and rule1 is not None) and (
-        max_rule_conds is None or len(rule1.conds) < max_rule_conds
-    ):  # Stop refining rule if no negative examples remain
+    num_neg_covered = len(rule0.covers(neg_df))
+    while num_neg_covered > 0 and rule1 is not None: # Stop refining rule if no negative examples remain
+        user_halt = (max_rule_conds is not None and len(rule1.conds) >= max_rule_conds) or \
+            (min_rule_samples is not None and num_neg_covered + rule0.num_covered(pos_df) < min_rule_samples)
+        if user_halt:
+            if min_rule_samples is not None and rule0.conds:
+                rule0.conds.pop(-1)
+            break
+
         rule1 = best_successor(
             rule0, possible_conds, pos_df, neg_df, verbosity=verbosity
         )
@@ -47,19 +54,27 @@ def grow_rule(
             rule0 = rule1
             if verbosity >= 4:
                 print(f"negs remaining {len(rule0.covers(neg_df))}")
+        num_neg_covered = len(rule0.covers(neg_df))
 
     if not rule0.isempty():
         if verbosity >= 2:
             print(f"grew rule: {rule0}")
+        if verbosity >= 4:
+            print(f"covered {len(rule0.covers(neg_df)) + len(rule0.covers(pos_df))} samples")
         return rule0
     else:
         # warning_str = f"grew an empty rule: {rule0} over {len(pos_idx)} pos and {len(neg_idx)} neg"
         # _warn(warning_str, RuntimeWarning, filename='base_functions', funcname='grow_rule')
         return rule0
 
-
 def grow_rule_cn(
-    cn, pos_idx, neg_idx, initial_rule=Rule(), max_rule_conds=None, verbosity=0
+    cn,
+    pos_idx,
+    neg_idx,
+    initial_rule=Rule(),
+    max_rule_conds=None,
+    min_rule_samples=None,
+    verbosity=0
 ):
     """Fit a new rule to add to a ruleset. (Optimized version.)"""
 
@@ -70,8 +85,12 @@ def grow_rule_cn(
 
     num_neg_covered = len(cn.rule_covers(rule0, subset=neg_idx))
     while num_neg_covered > 0:  # Stop refining rule if no negative examples remain
-        user_halt = max_rule_conds is not None and len(rule1.conds) >= max_rule_conds
+        print('min_rule_samples', min_rule_samples, num_neg_covered + len(cn.rule_covers(rule0, subset=pos_idx)))
+        user_halt = (max_rule_conds is not None and len(rule1.conds) >= max_rule_conds) or \
+            (min_rule_samples is not None and (num_neg_covered + len(cn.rule_covers(rule0, subset=pos_idx))) < min_rule_samples)
         if user_halt:
+            if min_rule_samples is not None and rule0.conds:
+                rule0.conds.pop(-1)
             break
 
         rule1 = best_rule_successor_cn(cn, rule0, pos_idx, neg_idx, verbosity=verbosity)
@@ -85,6 +104,8 @@ def grow_rule_cn(
     if not rule0.isempty():
         if verbosity >= 2:
             print(f"grew rule: {rule0}")
+        if verbosity >= 4:
+            print(f"covered {len(cn.rule_covers(rule0, subset=neg_idx)) + len(cn.rule_covers(rule0, subset=pos_idx))} samples")
         return rule0
     else:
         # warning_str = f"grew an empty rule: {rule0} over {len(pos_idx)} pos and {len(neg_idx)} neg"
@@ -714,8 +735,8 @@ def truncstr(iterable, limit=5, direction="left"):
         return str(iterable)
 
 
-def stop_early(ruleset, pos_remaining, neg_remaining, max_rules, min_rule_samples, max_total_conds):
+def stop_early(ruleset, pos_remaining, neg_remaining, max_rules, min_ruleset_samples, max_total_conds):
     """Function to decide whether to halt training."""
     return (max_rules is not None and len(ruleset.rules) >= max_rules) \
         or (max_total_conds is not None and ruleset.count_conds() >= max_total_conds) \
-        or (min_rule_samples is not None and (len(pos_remaining) + len(neg_remaining) < min_rule_samples))
+        or (min_ruleset_samples is not None and (len(pos_remaining) + len(neg_remaining) < min_ruleset_samples))

@@ -29,6 +29,7 @@ class IREP(AbstractRulesetClassifier):
         n_discretize_bins=10,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         alpha=1.0,
@@ -47,8 +48,10 @@ class IREP(AbstractRulesetClassifier):
         Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
         max_rules : int, default=None
             Maximum number of rules.
-        min_rule_samples : int, default=None
-            Minimum number of samples per rule.
+        min_rule_samples : int, defulat=None
+            Minimum number of covered samples per rule before halting rule growth.
+        min_ruleset_samples : int, default=None
+            Minimum number of samples per rule before halting ruleset growth.
         max_rule_conds : int, default=None
             Maximum number of conds per rule.
         max_total_conds : int, default=None
@@ -72,6 +75,7 @@ class IREP(AbstractRulesetClassifier):
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
             min_rule_samples=min_rule_samples,
+            min_ruleset_samples=min_ruleset_samples,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
             alpha=alpha,
@@ -253,7 +257,7 @@ class IREP(AbstractRulesetClassifier):
 
             # If applicable, check for user-specified early stopping
             if stop_early(ruleset, pos_remaining, neg_remaining,
-                self.max_rules, self.min_rule_samples, self.max_total_conds):
+                self.max_rules, self.min_ruleset_samples, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
@@ -278,6 +282,7 @@ class IREP(AbstractRulesetClassifier):
                 pos_growset,
                 neg_growset,
                 ruleset.possible_conds,
+                min_rule_samples=self.min_rule_samples,
                 max_rule_conds=self.max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -353,7 +358,7 @@ class IREP(AbstractRulesetClassifier):
 
             # If applicable, check for user-specified early stopping
             if stop_early(ruleset, pos_remaining_idx, neg_remaining_idx,
-                self.max_rules, self.min_rule_samples, self.max_total_conds):
+                self.max_rules, self.min_ruleset_samples, self.max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples (if applicable)
@@ -386,6 +391,7 @@ class IREP(AbstractRulesetClassifier):
                 pos_growset_idx,
                 neg_growset_idx,
                 initial_rule=Rule(),
+                min_rule_samples=self.min_rule_samples,
                 max_rule_conds=self.max_rule_conds,
                 verbosity=self.verbosity,
             )

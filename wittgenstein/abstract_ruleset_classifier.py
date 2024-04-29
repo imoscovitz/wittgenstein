@@ -29,6 +29,7 @@ class AbstractRulesetClassifier(ABC):
         n_discretize_bins=10,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         alpha=1.0,
@@ -41,7 +42,7 @@ class AbstractRulesetClassifier(ABC):
             "prune_size",
             "n_discretize_bins",
             "max_rules",
-            "min_rule_samples",
+            "min_ruleset_samples",
             "max_rule_conds",
             "max_total_conds",
             "alpha",
@@ -53,6 +54,7 @@ class AbstractRulesetClassifier(ABC):
         self.n_discretize_bins = n_discretize_bins
         self.max_rules = max_rules
         self.min_rule_samples = min_rule_samples
+        self.min_ruleset_samples = min_ruleset_samples
         self.max_rule_conds = max_rule_conds
         self.max_total_conds = max_total_conds
         self.alpha = alpha

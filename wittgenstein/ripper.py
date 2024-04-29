@@ -35,6 +35,7 @@ class RIPPER(AbstractRulesetClassifier):
         n_discretize_bins=10,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         alpha=1.0,
@@ -60,8 +61,10 @@ class RIPPER(AbstractRulesetClassifier):
         Limits for early-stopping. Intended for enhancing model interpretability and limiting training time on noisy datasets. Not specifically intended for use as a hyperparameter, since pruning already occurs during training, though it is certainly possible that tuning could improve model performance.
         max_rules : int, default=None
             Maximum number of rules.
-        min_rule_samples : int, default=None
-            Minimum number of samples per rule.
+        min_rule_samples : int, defulat=None
+            Minimum number of covered samples per rule before halting rule growth.
+        min_ruleset_samples : int, default=None
+            Minimum number of samples per rule before halting ruleset growth.
         max_rule_conds : int, default=None
             Maximum number of conds per rule.
         max_total_conds : int, default=None
@@ -83,6 +86,7 @@ class RIPPER(AbstractRulesetClassifier):
             n_discretize_bins=n_discretize_bins,
             max_rules=max_rules,
             min_rule_samples=min_rule_samples,
+            min_ruleset_samples=min_ruleset_samples,
             max_rule_conds=max_rule_conds,
             max_total_conds=max_total_conds,
             alpha=alpha,
@@ -232,6 +236,7 @@ class RIPPER(AbstractRulesetClassifier):
                 dl_allowance=self.dl_allowance,
                 max_rules=self.max_rules,
                 min_rule_samples=self.min_rule_samples,
+                min_ruleset_samples=self.min_ruleset_samples,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
                 initial_model=initial_model,
@@ -245,6 +250,7 @@ class RIPPER(AbstractRulesetClassifier):
                 dl_allowance=self.dl_allowance,
                 max_rules=self.max_rules,
                 min_rule_samples=self.min_rule_samples,
+                min_ruleset_samples=self.min_ruleset_samples,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
                 initial_model=initial_model,
@@ -274,6 +280,7 @@ class RIPPER(AbstractRulesetClassifier):
                     pos_idx,
                     neg_idx,
                     prune_size=self.prune_size,
+                    min_rule_samples=self.min_rule_samples,
                     random_state=iter_random_state,
                 )
             else:
@@ -282,6 +289,7 @@ class RIPPER(AbstractRulesetClassifier):
                     pos_df,
                     neg_df,
                     prune_size=self.prune_size,
+                    min_rule_samples=self.min_rule_samples,
                     random_state=iter_random_state,
                 )
 
@@ -311,6 +319,7 @@ class RIPPER(AbstractRulesetClassifier):
                 df,
                 max_rules=self.max_rules,
                 min_rule_samples=self.min_rule_samples,
+                min_ruleset_samples=self.min_ruleset_samples,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
                 random_state=self.random_state,
@@ -320,6 +329,7 @@ class RIPPER(AbstractRulesetClassifier):
                 df,
                 max_rules=self.max_rules,
                 min_rule_samples=self.min_rule_samples,
+                min_ruleset_samples=self.min_ruleset_samples,
                 max_rule_conds=self.max_rule_conds,
                 max_total_conds=self.max_total_conds,
                 random_state=self.random_state,
@@ -423,6 +433,7 @@ class RIPPER(AbstractRulesetClassifier):
         dl_allowance,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         initial_model=None,
@@ -446,7 +457,7 @@ class RIPPER(AbstractRulesetClassifier):
 
             # If applicable, check for user-specified early stopping
             if stop_early(ruleset, pos_remaining, neg_remaining,
-                max_rules, min_rule_samples, max_total_conds):
+                max_rules, min_ruleset_samples, max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples
@@ -471,6 +482,7 @@ class RIPPER(AbstractRulesetClassifier):
                 pos_growset,
                 neg_growset,
                 ruleset.possible_conds,
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -552,6 +564,7 @@ class RIPPER(AbstractRulesetClassifier):
         dl_allowance,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         initial_model=None,
@@ -575,7 +588,7 @@ class RIPPER(AbstractRulesetClassifier):
 
             # If applicable, check for user-specified early stopping
             if stop_early(ruleset, pos_remaining_idx, neg_remaining_idx,
-                max_rules, min_rule_samples, max_total_conds):
+                max_rules, min_ruleset_samples, max_total_conds):
                 break
 
             # Grow-prune split remaining uncovered examples
@@ -607,6 +620,7 @@ class RIPPER(AbstractRulesetClassifier):
                 pos_growset_idx,
                 neg_growset_idx,
                 initial_rule=Rule(),
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -687,6 +701,7 @@ class RIPPER(AbstractRulesetClassifier):
         pos_df,
         neg_df,
         prune_size,
+        min_rule_samples=None,
         max_rule_conds=None,
         random_state=None,
     ):
@@ -725,7 +740,7 @@ class RIPPER(AbstractRulesetClassifier):
                 break  # Possible where optimization run > 1
 
             if stop_early(new_ruleset, pos_remaining, neg_remaining,
-                self.max_rules, self.min_rule_samples, self.max_total_conds):
+                self.max_rules, self.min_ruleset_samples, self.max_total_conds):
                 break
 
             # Create alternative rules
@@ -738,6 +753,7 @@ class RIPPER(AbstractRulesetClassifier):
                 neg_growset,
                 original_ruleset.possible_conds,
                 initial_rule=Rule(),
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -768,6 +784,7 @@ class RIPPER(AbstractRulesetClassifier):
                 neg_growset,
                 original_ruleset.possible_conds,
                 initial_rule=ruleset.rules[i],
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -881,6 +898,7 @@ class RIPPER(AbstractRulesetClassifier):
         pos_idx,
         neg_idx,
         prune_size,
+        min_rule_samples=None,
         max_rule_conds=None,
         random_state=None,
     ):
@@ -920,7 +938,7 @@ class RIPPER(AbstractRulesetClassifier):
                 break  # Possible where optimization run > 1
 
             if stop_early(new_ruleset, pos_remaining_idx, neg_remaining_idx,
-                self.max_rules, self.min_rule_samples, self.max_total_conds):
+                self.max_rules, self.min_ruleset_samples, self.max_total_conds):
                 break
 
             # Create alternative rules
@@ -934,6 +952,7 @@ class RIPPER(AbstractRulesetClassifier):
                 pos_growset_idx,
                 neg_growset_idx,
                 initial_rule=Rule(),
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -967,6 +986,7 @@ class RIPPER(AbstractRulesetClassifier):
                 pos_growset_idx,
                 neg_growset_idx,
                 initial_rule=ruleset.rules[i],
+                min_rule_samples=min_rule_samples,
                 max_rule_conds=max_rule_conds,
                 verbosity=self.verbosity,
             )
@@ -1085,6 +1105,7 @@ class RIPPER(AbstractRulesetClassifier):
         df,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
@@ -1109,6 +1130,7 @@ class RIPPER(AbstractRulesetClassifier):
                 dl_allowance=self.dl_allowance,
                 max_rules=max_rules,
                 min_rule_samples=min_rule_samples,
+                min_ruleset_samples=min_ruleset_samples,
                 max_rule_conds=max_rule_conds,
                 max_total_conds=max_total_conds,
                 random_state=random_state,
@@ -1127,6 +1149,7 @@ class RIPPER(AbstractRulesetClassifier):
         df,
         max_rules=None,
         min_rule_samples=None,
+        min_ruleset_samples=None,
         max_rule_conds=None,
         max_total_conds=None,
         random_state=None,
@@ -1147,6 +1170,7 @@ class RIPPER(AbstractRulesetClassifier):
                 dl_allowance=self.dl_allowance,
                 max_rules=max_rules,
                 min_rule_samples=min_rule_samples,
+                min_ruleset_samples=min_ruleset_samples,
                 max_rule_conds=max_rule_conds,
                 max_total_conds=max_total_conds,
                 random_state=random_state,
