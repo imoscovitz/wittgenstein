@@ -85,7 +85,6 @@ def grow_rule_cn(
 
     num_neg_covered = len(cn.rule_covers(rule0, subset=neg_idx))
     while num_neg_covered > 0:  # Stop refining rule if no negative examples remain
-        print('min_rule_samples', min_rule_samples, num_neg_covered + len(cn.rule_covers(rule0, subset=pos_idx)))
         user_halt = (max_rule_conds is not None and len(rule1.conds) >= max_rule_conds) or \
             (min_rule_samples is not None and (num_neg_covered + len(cn.rule_covers(rule0, subset=pos_idx))) < min_rule_samples)
         if user_halt:
