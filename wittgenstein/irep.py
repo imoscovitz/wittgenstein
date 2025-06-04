@@ -426,7 +426,6 @@ class IREP(AbstractRulesetClassifier):
                 prune_precision = base_functions.rule_precision_cn(
                     self.cn, pruned_rule, pos_pruneset_idx, neg_pruneset_idx
                 )
-                print('prune_precision for rule', pruned_rule, prune_precision)
                 if not prune_precision or prune_precision < 0.50:
                     break
                 # Otherwise, add new Rule, remove covered examples, and continue

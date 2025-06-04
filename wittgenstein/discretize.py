@@ -200,14 +200,12 @@ class BinTransformer:
             if char == "-" and i != 0:
                 dashes.append(i)
         if len(dashes) > 1:
-            print(feat, value, dashes)
             dashes = [idx for idx in dashes if not self._maybeexp_idx(value, idx)]
         elif len(dashes) == 1:
             split_idx = dashes[0]
             floor = value[:split_idx]
             ceil = value[split_idx + 1 :]
         else:
-            print('dashes', dashes)
             _warn(f"{dashes} there was a problem parsing range in string {value} feature {feat}", RuntimeWarning, 'discretize', 'find_floor_ceil')
             return None
         if is_valid_decimal(floor) and is_valid_decimal(ceil):
