@@ -179,53 +179,55 @@ To specify a starting point for training, use `initial_model` when calling `fit`
 Expected string syntax for a Ruleset is `[<Rule1> V <Rule2> V ...]`, for a Rule `[<Cond1>^<Cond2>^...], and for a Cond `feature=value`. '^' represents 'and'; 'V' represents 'or'. (See the [Training](https://github.com/imoscovitz/wittgenstein#training) section above).
 
 ### Interpreter models
-Use the interpret module to interpret non-wittgenstein models. `interpret_model` generates a ruleset that approximates some black-box model. It does to by fitting a wittgenstein classifier to the predictions of the other model.
+Use the interpret module to interpret non-wittgenstein models. `interpret_model` generates a ruleset that approximates some black-box model by fitting a wittgenstein classifier to the predictions of the other model.
 ```python
-# Train the model we want to interpret
->>> from tensorflow.keras import Sequential
->>> from tensorflow.keras.layers import Dense
->>> mlp = Sequential()
->>> mlp.add(Dense(60, input_dim=13, activation='relu'))
->>> mlp.add(Dense(30, activation='relu'))
->>> mlp.add(Dense(1, activation='sigmoid'))
->>> mlp.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
->>> mlp.fit(
->>>   X_train,
->>>   y_train,
->>>   batch_size=1,
->>>   epochs=10)
-
-# Create and fit wittgenstein classifier to use as a model interpreter.
+>>> import torch
+>>> from torch import nn
 >>> from wittgenstein.interpret import interpret_model, score_fidelity
->>> interpreter = RIPPER(random_state=42)
->>> interpret_model(model=mlp, X=X_train, interpreter=interpreter).out_pretty()
-[[Proline=>1227.0] V
-[Proline=880.0-1048.0] V
-[Proline=1048.0-1227.0] V
-[Proline=736.0-880.0] V
-[Alcalinityofash=16.8-17.72]]
+
+# Define and train a PyTorch model
+>>> class WineNet(nn.Module):
+...     def __init__(self):
+...         super().__init__()
+...         self.net = nn.Sequential(
+...             nn.Linear(n_feats, 32), nn.ReLU(),
+...             nn.Linear(32, 1), nn.Sigmoid())
+...     def forward(self, x):
+...         return self.net(x)
+
+>>> model = WineNet()
+>>> # ... train model ...
+
+# Provide a predict function to handle DataFrame → tensor → binary array conversion
+>>> def torch_predict(X, model):
+...     with torch.no_grad():
+...         t = torch.tensor(X.values.astype(float), dtype=torch.float32)
+...         return (model(t).squeeze() > 0.5).numpy()
+
+# Fit a RIPPER interpreter to approximate the model's predictions
+>>> rip = RIPPER(random_state=1)
+>>> interpret_model(model=model, X=X_test, interpreter=rip, model_predict_function=torch_predict)
+>>> rip.out_model()
+[[Colorintensity=5.68-7.24] V
+[Proline=>1283.0] V
+[Colorintensity=3.42-4.35]]
 ```
-We can also use the now-fitted interpreter to approximate the reasons behind the underlying model's positive predictions. (See [Prediction](https://github.com/imoscovitz/wittgenstein#prediction)).
+Use `give_reasons=True` to see which rules fired for each prediction.
 ```python
->>> preds = (mlp.predict(X_test.tail()) > .5).flatten()
->>> _, interpretation = interpreter.predict(X_test.tail(), give_reasons=True)
->>> print(f'tf preds: {preds}\n')
->>> interpretation
-tf preds: [ True False False  True False]
-[[<Rule [Proline=880.0-1048.0]>],
- [],
- [],
- [<Rule [Proline=736.0-880.0]>, <Rule [Alcalinityofash=16.8-17.72]>],
- []]
+>>> preds, reasons = rip.predict(X_test, give_reasons=True)
+>>> reasons[:5]
+[[], [], [], [<Rule [Colorintensity=5.68-7.24]>, <Rule [Proline=>1283.0]>], []]
 ```
 Score how faithfully the interpreter fits the underlying model with `score_fidelity`.
 ```python
+>>> from sklearn.metrics import precision_score, recall_score, f1_score
 >>> score_fidelity(
->>>    X_test,
->>>    interpreter,
->>>    model=mlp,
->>>    score_function=[precision_score, recall_score, f1_score])
-[1.0, 0.7916666666666666, 0.8837209302325582]
+...    X_test,
+...    rip,
+...    model=model,
+...    model_predict_function=torch_predict,
+...    score_function=[precision_score, recall_score, f1_score])
+[1.0, 0.75, 0.857]
 ```
 ## Issues
 If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
