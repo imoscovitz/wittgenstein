@@ -368,7 +368,7 @@ class Rule:
         )
 
     def __hash__(self):
-        return hash(str([self.conds]))
+        return hash(tuple(sorted([str(s) for s in self.conds])))
 
     def __len__(self):
         return len(self.conds)
