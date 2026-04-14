@@ -586,7 +586,7 @@ def df_shuffled_split(df, split_size=0.66, random_state=None):
         Tuple of shuffled and split DataFrame.
     """
     idx1, idx2 = random_split(
-        df.index, split_size, res_type=set, random_state=random_state
+        df.index, split_size, res_type=list, random_state=random_state
     )
     return df.loc[idx1, :], df.loc[idx2, :]
 

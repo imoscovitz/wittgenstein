@@ -178,9 +178,13 @@ def test_random_split_set_shuffled_split_are_same():
 
 
 def test_random_split_df_shuffled_split_are_same():
-    idx1, idx2 = random_split(FULL_DF.index, 0.66, res_type=set, random_state=42)
+    idx1, idx2 = random_split(FULL_DF.index, 0.66, res_type=list, random_state=42)
     df1, df2 = df_shuffled_split(FULL_DF, split_size=0.66, random_state=42)
     assert (set(FULL_DF.loc[idx1, :].index), set(FULL_DF.loc[idx2, :].index)) == (
-        idx1,
-        idx2,
+        set(idx1),
+        set(idx2),
     )
+
+def test_eq():
+    assert Ruleset([Rule([Cond("f1", "v1"), Cond("f2", "v2")])]) == \
+        Ruleset([Rule([Cond("f2", "v2"), Cond("f1", "v1")])])
