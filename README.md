@@ -74,7 +74,7 @@ To score a trained model, use the `score` function:
 ```python
 >>> X_test = test.drop('Poisonous/Edible', axis=1)
 >>> y_test = test['Poisonous/Edible']
->>> ripper_clf.score(test_X, test_y)
+>>> ripper_clf.score(X_test, y_test)
 0.9985686906328078
 ```
 
@@ -118,8 +118,7 @@ We can also ask our model to tell us why it made each positive prediction using 
 ```
 
 ### Model selection
-wittgenstein is compatible with sklearn model_selection tools such as `cross_val_score` and `GridSearchCV`, as well
-as ensemblers like `StackingClassifier`.
+wittgenstein is compatible with sklearn model_selection tools such as `cross_val_score` and `GridSearchCV`, as well as ensemblers like `StackingClassifier`.
 
 Cross validation:
 ```python
@@ -144,10 +143,19 @@ Ensemble:
 >>> from sklearn.naive_bayes import GaussianNB
 >>> from sklearn.linear_model import LogisticRegression
 >>> tree = DecisionTreeClassifier(random_state=42)
->>> nb = GaussianNB(random_state=42)
+>>> nb = GaussianNB()
 >>> estimators = [("rip", ripper_clf), ("tree", tree), ("nb", nb)]
 >>> ensemble_clf = StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
 >>> ensemble_clf.fit(X_train, y_train)
+```
+
+### Multiclass
+For multiclass tasks, use in combination with sklearn `OneVsRestClassifier`:
+```python
+>>> from sklearn.multiclass import OneVsRestClassifier
+>>> rip = RIPPER()
+>>> clf = OneVsRestClassifier(rip)
+>>> clf.fit(X, y)
 ```
 
 ### Defining and altering models
@@ -229,11 +237,123 @@ Score how faithfully the interpreter fits the underlying model with `score_fidel
 ...    score_function=[precision_score, recall_score, f1_score])
 [1.0, 0.75, 0.857]
 ```
-## Issues
-If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues), and I'll respond.
+### NLP
+Building lexical models is straightforward.
 
-## Contributing
-Contributions are welcome! If you are interested in contributing, let me know at ilan.moscovitz@gmail.com or on [linkedin](https://www.linkedin.com/in/ilan-moscovitz/).
+```python
+>>> # Extract texts and labels from the SMS Spam Collection dataset
+>>> # ...
+>>> from sklearn.feature_extraction.text import CountVectorizer
+>>> vectorizer = CountVectorizer(binary=True, ngram_range=(1,3), min_df=5,
+...   stop_words='english')
+>>> X = vectorizer.fit_transform(texts).toarray() # convert from sparse to dense array
+>>> rip = RIPPER()
+>>> rip.fit(X, y=labels, pos_class='spam', feature_names=vectorizer.get_feature_names_out())
+>>> rip.out_model() # Binary BoW model -- 1 indicates presence of token, 0 its absence
+[[free=1 ^ txt=1] V
+[claim=1] V
+[mobile=1 ^ gt=0 ^ left=0 ^ free=1] V
+[txt=1 ^ 150p=1] V
+[txt=1 ^ win=1] V
+[stop=1 ^ send=1] V
+[mobile=1 ^ gt=0 ^ 50=1] V
+[service=1 ^ dating=1] V
+[reply=1 ^ video=1] V
+[free=1 ^ nokia=1] V
+[box=1 ^ po=1] V
+...
+```
+
+You can also use `interpret_model` to distill an LM featurized with e.g. bag-of-words or TFIDF. The example below shows this approach with a neural net classifying whether recipes are Hungarian. (See [interpreter models](https://github.com/imoscovitz/wittgenstein/blob/master/README.md#interpreter-models) above).
+
+```python
+>>> from sklearn.feature_extraction.text import TfidfVectorizer
+>>> vectorizer = TfidfVectorizer(stop_words='english', min_df=5, ngram_range=(1, 2), max_features=1000)
+>>> X = vectorizer.fit_transform([example['ingredients'] for example in data])
+>>> feature_names = vectorizer.get_feature_names_out()
+
+>>> # Train a neural net on the TFIDF features>>> # Use the same torch_predict function and training pattern from the interpreter models section above
+>>> rip = RIPPER(n_discretize_bins=5, random_state=42)
+>>> X_df = pd.DataFrame(X, columns=feature_names)
+>>> interpret_model(model=LM_model, X=X_df, interpreter=rip, model_predict_function=torch_predict)
+>>> rip.out_model()
+[[hungarian=0.11-0.21] V
+[paprika=0.12-0.19 ^ cut=>0.076] V
+[hungarian=0.21-0.32] V
+[sweetpaprika=0.091-0.18 ^ fresh=<0.043] V
+[paprika=0.12-0.19 ^ beef=>0.057] V
+[eggnoodles=>0.31]
+...
+```
+
+### wittgenstein-LLM collaboration
+This demonstration combines LLM feature extraction with rule inference to produce both flexible predictions and explicit, interpretable rules. Results from this small-scale evaluation suggest this hybrid approach may improve classification performance while preserving the interpretability of rule-based models.
+
+Using the CFPB consumer complaints dataset (400 train, 300 test, balanced classes), the task is to predict whether a consumer received monetary relief. The LLM extracts semantic features from complaint narratives — e.g., does the consumer describe a broken agreement, or cite specific legal statutes — which RIPPER then uses to learn interpretable rule combinations.
+
+Accuracy and F1 scores on the held-out test set:
+
+- LLM judge (zero-shot): 0.56 / 0.23
+- LLM judge (10-shot): 0.69 / 0.58
+- RIPPER on structured features only: 0.61 / 0.50
+- RIPPER on structured + LLM-derived features (zero-shot): 0.79 / 0.75
+
+The code can be adapted to other text classification tasks by defining new feature schemas and swapping in a different dataset.
+
+The full example can be found in [this notebook](https://github.com/imoscovitz/wittgenstein/blob/master/examples/LLM_featurization_example.ipynb).
+
+```python
+>>> text_features = {
+    "describes_specific_transaction": {
+        "description": "Does the consumer describe a specific financial transaction with concrete details (dates, amounts, payment method, confirmation numbers)?",
+        "values": ["yes", "no"]
+    },
+    "payment_made_not_credited": {
+        "description": "Does the consumer claim they made a payment that was not properly applied or acknowledged by the company?",
+        "values": ["yes", "no"]
+    },
+    "disputes_specific_fee": {
+        "description": "Does the consumer dispute a specific fee such as a late fee, interest charge, or cancellation fee as unfair or incorrect?",
+        "values": ["yes", "no"]
+    },
+    ...
+
+>>> FEATURIZATION_PROMPT = \
+  """You are a feature extractor for consumer financial complaints about debt collection.
+  Read the complaint and return a JSON object with ONLY these keys and ONLY the allowed values.
+
+  {feature_schema}
+
+  Return ONLY valid JSON. No explanation or commentary.
+
+  COMPLAINT:
+  {narrative}""".replace('{feature_schema}', str(text_features))
+
+>>> # Use an LLM to extract features (see notebook for implementation)
+>>> featurized_texts_X_train = await featurize_X_texts(X_train, text_feat)
+>>> featurized_X_train = pd.concat(
+...   [X_train.reset_index(drop=True), pd.DataFrame(featurized_texts_X_train)], axis=1)
+# repeat for X_test
+
+>>> # Train and score the ruleset classifier
+>>> rip = RIPPER(random_state=42)
+>>> rip.fit(featurized_X_train.drop(text_feat, axis=1), y_train)
+>>> rip.out_model()
+[[describes_specific_transaction=yes ^ disputes_specific_fee=yes ^ Issue=Attemptstocollectdebtnotowed] V
+[complaint_narrative_style=personal_story ^ describes_specific_transaction=yes ^ requests_refund_or_reversal=yes ^ Sub-issue=Attemptedtocollectwrongamount ^ disputes_specific_fee=yes] V
+[complaint_narrative_style=personal_story ^ describes_specific_transaction=yes ^ Issue=Communicationtactics] V
+[describes_specific_transaction=yes ^ Sub-issue=Debtisnotyours] V
+[complaint_narrative_style=personal_story ^ disputes_specific_fee=yes] V
+[complaint_narrative_style=personal_story ^ product_or_service_not_received=yes] V
+[disputes_specific_fee=yes] V
+[Issue=Attemptstocollectdebtnotowed ^ describes_specific_transaction=yes ^ Sub-issue=Debtwasresultofidentitytheft ^ prior_attempts_to_resolve=multiple]]
+
+>>> rip.score(featurized_X_test.drop(text_feat, axis=1), y_test), rip.score(featurized_X_test.drop(text_feat, axis=1), y_test, score_function=f1_score)
+(0.7866666666666666, np.float64(0.7480314960629921))
+```
+
+## Issues
+If you encounter any issues, or if you have feedback or improvement requests for how wittgenstein could be more helpful for you, please post them to [issues](https://github.com/imoscovitz/wittgenstein/issues).
 
 ## Useful references
 - [My article in _Towards Data Science_ explaining IREP, RIPPER, and wittgenstein](https://medium.com/towards-data-science/how-to-perform-explainable-machine-learning-classification-without-any-trees-873db4192c68)
