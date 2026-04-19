@@ -484,17 +484,22 @@ def rule_precision_cn(cn, rule, pos_idx, neg_idx):
         return len(pos_covered) / total_n_covered
 
 
-def score_accuracy(predictions, actuals):
+def score_accuracy(actuals, predictions):
     """Calculate accuracy score of a trained model on a test set.
 
-    predictions : iterable<bool>
-        True for predicted positive class, False otherwise.
     actuals : iterable<bool>
         True for actual positive class, False otherwise.
+    predictions : iterable<bool>
+        True for predicted positive class, False otherwise.
     """
+    if len(actuals) != len(predictions):
+        raise ValueError(
+            f"Length mismatch: actuals ({len(actuals)}) vs predictions ({len(predictions)})"
+        )
+    n = len(actuals)
+    if n == 0: return None
     t = [pr for pr, act in zip(predictions, actuals) if pr == act]
-    n = predictions
-    return len(t) / len(n)
+    return len(t) / n
 
 
 def _accuracy(object, pos_pruneset, neg_pruneset):
