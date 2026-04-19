@@ -117,6 +117,29 @@ We can also ask our model to tell us why it made each positive prediction using 
 [])
 ```
 
+For individual rule-level statistics, use `.rule_stats`. It will return a pandas Dataframe containing basic statistics, as well as a list of DataFrames for each rule,
+indexed by the rules' indices.
+
+```python
+>>> stats, examples = ripper_clf.rule_stats(X_train, y_train, n_examples=3)
+>>> stats
+```
+|    |   rule_idx | rule_str                                       |   coverage |   n_covered |   precision |   recall |       f1 |
+|---:|-----------:|:-----------------------------------------------|-----------:|------------:|------------:|---------:|---------:|
+|  0 |          0 | [Proline=>1048.0]                              |  0.203008  |          27 |           1 | 0.613636 | 0.760563 |
+|  1 |          1 | [Proline=736.0-1048.0^Flavanoids=>2.98]        |  0.0601504 |           8 |           1 | 0.181818 | 0.307692 |
+|  2 |          2 | [Proline=736.0-1048.0^Colorintensity=3.95-5.3] |  0.0526316 |           7 |           1 | 0.159091 | 0.27451  |
+|  3 |          3 | [Hue=1.04-1.16^Alcohol=13.21-13.77]            |  0.0451128 |           6 |           1 | 0.136364 | 0.24     |
+```python
+>>> examples
+```
+|    | Alcohol       | Malic acid   | Ash   | Alcalinity of ash   | Magnesium     | Total phenols   | Flavanoids   | Nonflavanoid phenols   | Proanthocyanins   | Color intensity   | Hue         | OD280/OD315 of diluted wines   | Proline   |   Class |
+|---:|:--------------|:-------------|:------|:--------------------|:--------------|:----------------|:-------------|:-----------------------|:------------------|:------------------|:------------|:-------------------------------|:----------|--------:|
+| 33 | 13.21 - 13.77 | <1.55        | >2.6  | 18.5 - 20.0         | >112.0        | >2.89           | 2.44 - 2.98  | >0.48                  | 1.14 - 1.43       | 5.3 - 6.78        | >1.16       | 2.93 - 3.29                    | >1048.0   |       1 |
+| 34 | 13.21 - 13.77 | 1.76 - 2.16  | >2.6  | 18.5 - 20.0         | 102.0 - 112.0 | 2.0 - 2.5       | 2.44 - 2.98  | 0.26 - 0.3             | 1.43 - 1.66       | 3.95 - 5.3        | 1.04 - 1.16 | 2.52 - 2.93                    | >1048.0   |       1 |
+| 53 | >13.77        | 1.76 - 2.16  | >2.6  | 16.8 - 18.5         | >112.0        | >2.89           | 2.44 - 2.98  | 0.39 - 0.48            | 1.66 - 2.0        | 5.3 - 6.78        | 1.04 - 1.16 | 2.93 - 3.29                    | >1048.0   |       1 |
+
+
 ### Model selection
 wittgenstein is compatible with sklearn model_selection tools such as `cross_val_score` and `GridSearchCV`, as well as ensemblers like `StackingClassifier`.
 

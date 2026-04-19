@@ -264,6 +264,97 @@ class AbstractRulesetClassifier(ABC):
             verbosity=self.verbosity
         )
 
+    def rule_stats(self, X, y=None, n_examples=None, feature_names=None, random_state=None):
+        _check_is_model_fit(self)
+
+        self._ensure_has_bin_transformer()
+
+        _upgrade_bin_transformer_ifdepr(self)
+
+        # Preprocess prediction data
+        preprocess_params = {
+            "X": X,
+            "class_feat": self.class_feat,
+            "pos_class": self.pos_class,
+            "bin_transformer_": self.bin_transformer_,
+            "user_requested_feature_names": feature_names,
+            "selected_features_": self.selected_features_,
+            "trainset_features_": self.trainset_features_,
+            "verbosity": self.verbosity,
+        }
+
+        X_df = preprocess.preprocess_prediction_data(preprocess_params)
+
+        rule_idx_list = []
+        rule_str_list = []
+        coverage_list = []
+        n_covered_list = []
+        precision_list = []
+        recall_list = []
+        f1_list = []
+        examples_df_list = []
+        
+        if y is not None:
+            actuals = [yi == self.pos_class for yi in preprocess._preprocess_y_score_data(y)]
+            y_aligned = pd.Series(preprocess._preprocess_y_score_data(y), index=X_df.index)
+        
+        for i, rule in enumerate(self.ruleset_):
+            covered = rule.covers(X_df)
+            covered_idx = covered.index
+            preds = X_df.index.isin(covered_idx)
+
+            n_covered = sum(preds)
+            coverage = n_covered / len(X_df)
+            
+            rule_idx_list.append(i)
+            rule_str_list.append(str(rule))
+            coverage_list.append(coverage)
+            n_covered_list.append(n_covered)
+
+            # If y provided, output performance metrics
+            if y is not None:
+                rule_p = base_functions.score_precision(actuals, preds)
+                rule_r = base_functions.score_recall(actuals, preds)
+                rule_f1 = base_functions._f1(rule_p, rule_r)
+                precision_list.append(rule_p)
+                recall_list.append(rule_r)
+                f1_list.append(rule_f1)
+
+            if n_examples is not None:
+                # Add target column if y provided
+                if y is not None:
+                    covered = covered.copy()
+                    covered[self.class_feat] = y_aligned.loc[covered.index]
+            
+                # Sample or return all
+                if n_examples == -1:
+                    examples_df_list.append(covered)
+                elif n_examples > 0:
+                    examples_df_list.append(
+                        covered.sample(n=min(n_examples, len(covered)), random_state=random_state)
+                    )
+                else:
+                    raise ValueError(f'n_examples {n_examples} should be > 0 (or -1 for all)')
+                
+                
+        res = pd.DataFrame({
+            'rule_idx': rule_idx_list,
+            'rule_str': rule_str_list,
+            'coverage': coverage_list,
+            'n_covered': n_covered_list
+        })
+
+        if y is not None:
+            res['precision'] = precision_list
+            res['recall'] = recall_list
+            res['f1'] = f1_list
+
+        if n_examples is None:
+            return res
+        else:
+            return res, examples_df_list
+                    
+
     def copy(self):
         """Return deep copy of classifier."""
         return deepcopy(self)
