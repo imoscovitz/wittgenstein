@@ -6,6 +6,13 @@ from wittgenstein import IREP, RIPPER
 from wittgenstein.base_functions import df_shuffled_split
 from wittgenstein.base import Cond, Rule
 
+from wittgenstein.base_functions import (
+    score_accuracy,
+    score_precision,
+    score_recall,
+    score_f1,
+)
+
 DF = pd.read_csv("credit.csv")
 CLASS_FEAT = "Class"
 DEFAULT_CLASS_FEAT = "Class"
@@ -139,3 +146,31 @@ def test_missing_selected_features_raise_eror():
     except:
         exception_raised = True
     assert exception_raised
+
+
+def test_basic_metrics():
+    preds = irep.predict(test_x)
+    actuals = [True if label == CREDIT_POS_CLASS  else False for label in test_y]
+    accuracy_lw = score_accuracy(actuals, preds)
+    precision_lw = score_precision(actuals, preds)
+    recall_lw = score_recall(actuals, preds)
+    f1_lw = score_f1(actuals, preds)
+    assert accuracy_lw == pytest.approx(0.8382978723404255)
+    assert precision_lw == pytest.approx(0.7890625)
+    assert recall_lw == pytest.approx(0.9017857142857143)
+    assert f1_lw == pytest.approx(0.8416666666666666)
+
+    try:
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        sklearn_available = True
+    except:
+        sklearn_available = False
+    if sklearn_available:
+        accuracy_sk = accuracy_score(actuals, preds)
+        precision_sk = precision_score(actuals, preds)
+        recall_sk = recall_score(actuals, preds)
+        f1_sk = f1_score(actuals, preds)
+        assert accuracy_lw == pytest.approx(accuracy_sk)
+        assert precision_lw == pytest.approx(precision_sk)
+        assert recall_lw == pytest.approx(recall_sk)
+        assert f1_lw == pytest.approx(f1_sk)

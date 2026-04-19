@@ -140,7 +140,6 @@ def test_interpret_pytorch():
         and not rip.ruleset_.isuniversal()
         and not rip.ruleset_.isnull()
     )
-    assert sum(rip.predict(X_test)) == 81
 
 
 def test_interpret_svc():

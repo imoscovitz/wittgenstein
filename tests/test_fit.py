@@ -360,14 +360,26 @@ def test_max_rules():
     assert len(rip.ruleset_) <= 2
 
 def test_min_rule_samples():
-    irep = IREP(random_state=42, min_rule_samples=200)
-    rip = RIPPER(random_state=42, min_rule_samples=200)
+    irep = IREP(random_state=42, verbosity=5, min_rule_samples=100)
+    rip = RIPPER(random_state=42, verbosity=5, min_rule_samples=100)
 
     irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
     assert irep.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
 
     rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
     assert rip.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
+
+"""
+def test_min_ruleset_samples():
+    irep = IREP(random_state=42, min_ruleset_samples=100)
+    rip = RIPPER(random_state=42, min_ruleset_samples=100)
+
+    irep.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert irep.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
+
+    rip.fit(DF, class_feat=CLASS_FEAT, pos_class=POS_CLASS)
+    assert rip.ruleset_ == ruleset_fromstr("[[physician-fee-freeze=n]]")
+"""
 
 def test_max_rule_conds():
     irep = IREP(random_state=42, max_rule_conds=2)
