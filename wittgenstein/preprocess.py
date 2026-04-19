@@ -254,7 +254,7 @@ def _convert_to_prediction_df(X_or_Xy, class_feat, user_requested_feature_names=
         df.drop(class_feat, axis=1, inplace=True)
 
     # Set feature names
-    if user_requested_feature_names:
+    if user_requested_feature_names is not None:
         df.columns = [f for f in user_requested_feature_names if not f == class_feat]
     return df
 
