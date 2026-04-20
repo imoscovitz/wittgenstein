@@ -116,8 +116,9 @@ def test_verbosity():
 
 
 def test_missing_non_selected_features():
+    print([feat for feat in test_x if feat not in rip.selected_features_ and feat not in irep.selected_features_])
     missing_feat_df = test_x.copy()
-    missing_feat_df.drop('A1', axis=1, inplace=True)
+    missing_feat_df.drop('A2', axis=1, inplace=True)
 
     irep_preds = irep.predict(missing_feat_df)
     assert all(p in (True, False) for p in irep_preds)
