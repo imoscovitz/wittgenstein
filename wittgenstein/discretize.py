@@ -11,11 +11,13 @@ from wittgenstein.utils import rnd
 from wittgenstein.check import _warn, is_valid_decimal
 
 class BinTransformer:
-    def __init__(self, n_discretize_bins=10, names_precision=2, verbosity=0):
+    def __init__(self, n_discretize_bins=10, names_precision=2, verbosity=0, engine="pandas"):
         self.n_discretize_bins = n_discretize_bins
         self.names_precision = names_precision
         self.verbosity = verbosity
+        self.engine = engine
         self.bins_ = None
+        self.thresholds_ = None
 
     def __str__(self):
         return str(self.bins_)
@@ -67,27 +69,13 @@ class BinTransformer:
 
             n_discretize_bins = min(self.n_discretize_bins, len(df[feat].unique()))
 
-            # Collect intervals
-            bins = pd.qcut(
-                df[feat],
-                q=self.n_discretize_bins,
-                precision=self.names_precision,
-                duplicates="drop",
-            )
-            if (
-                len(bins.unique()) < 2
-            ):  # qcut can behave weirdly in heavily-skewed distributions
-                bins = pd.cut(
-                    df[feat],
-                    bins=self.n_discretize_bins,
-                    precision=self.names_precision,
-                    duplicates="drop",
-                )
-
-            # Drop empty bins and duplicate intervals to create bins
-            bin_counts = bins.value_counts()
-            bins = bin_counts[bin_counts > 0].index
-            bins = sorted(bins.unique())
+            if self.engine == 'numpy':
+                thresholds, bins = self._numpy_cut(df[feat], self.n_discretize_bins)
+            elif self.engine == 'pandas':
+                bins = self._pandas_cut(df, feat)
+                thresholds = None
+            else:
+                raise ValueError(f"Invalid engine: {self.engine}. Valid engines are 'numpy' and 'pandas'.")
 
             # Extend min/max to -inf, +inf to capture any ranges not present in training set
             bins[0] = pd.Interval(float("-inf"), bins[0].right)
@@ -98,7 +86,7 @@ class BinTransformer:
                 print(
                     f"{feat}: fit {len(df[feat].unique())} unique vals into {len(bins)} bins"
                 )
-            return bins
+            return bins, thresholds
 
         # Begin fitting
         feats_to_fit = self.find_continuous_feats(df, ignore_feats=ignore_feats)
@@ -110,9 +98,81 @@ class BinTransformer:
                 print(f"discretizing {len(feats_to_fit)} features: {feats_to_fit}\n")
 
         self.bins_ = {}
+        self.thresholds_ = {}
         for feat in feats_to_fit:
-            self.bins_[feat] = _fit_feat(df, feat)
+            bins, thresholds = _fit_feat(df, feat)
+            if len(bins) >= 2: # redundency check
+                self.bins_[feat] = bins
+                if thresholds is not None: self.thresholds_[feat] = thresholds
         return self.bins_
+
+    def _numpy_cut(self, data, n_bins):
+        """Fast quantile calculation with proper fallback"""
+        quantiles = np.linspace(0, 1, n_bins + 1)
+        thresholds = np.quantile(data.dropna(), quantiles)
+
+        if hasattr(self, 'names_precision'):
+            factor = 10 ** self.names_precision
+            thresholds = np.round(thresholds * factor) / factor
+
+        unique_thresholds = np.unique(thresholds)
+        if len(unique_thresholds) < 2:
+            # All values are the same - create single bin
+            min_val, max_val = data.min(), data.max()
+            if min_val == max_val:
+                return np.array([min_val, max_val]), ['no variation']
+            thresholds = np.array([min_val, max_val])
+
+        elif len(unique_thresholds) < len(thresholds):
+            # Some duplicate quantiles - fall back to equal-width
+            min_val, max_val = data.min(), data.max()
+            thresholds = np.linspace(min_val, max_val, n_bins + 1)
+
+            if hasattr(self, 'names_precision'):
+                factor = 10 ** self.names_precision
+                thresholds = np.round(thresholds * factor) / factor
+        else:
+            # Use quantile thresholds as-is
+            thresholds = unique_thresholds
+
+        bins = self._thresholds_to_intervals(thresholds)
+        return thresholds, bins
+
+    def _pandas_cut(self, df, feat):
+        """Use pandas interval cutting"""
+        # Collect intervals
+        bins = pd.qcut(
+            df[feat],
+            q=self.n_discretize_bins,
+            precision=self.names_precision,
+            duplicates="drop",
+        )
+        if (
+            len(bins.unique()) < 2
+        ):  # qcut can behave weirdly in heavily-skewed distributions
+            bins = pd.cut(
+                df[feat],
+                bins=self.n_discretize_bins,
+                precision=self.names_precision,
+                duplicates="drop",
+            )
+        # Drop empty bins and duplicate intervals to create bins
+        bin_counts = bins.value_counts()
+        bins = bin_counts[bin_counts > 0].index
+        bins = sorted(bins.unique())
+        return bins
+
+    def _thresholds_to_intervals(self, thresholds):
+        """Convert numpy thresholds to pandas intervals"""
+
+        if len(thresholds) < 2:
+            return []
+
+        intervals = [pd.Interval(thresholds[i], thresholds[i+1], closed='right')
+                     for i in range(len(thresholds)-1)]
+
+        return intervals
+
 
     def transform(self, df):
         """Transform DataFrame using fit bins."""
@@ -122,13 +182,17 @@ class BinTransformer:
             if self.bins_ is None:
                 return df
 
-            res = deepcopy(df[feat])
-            bins = self._strs_to_intervals(self.bins_[feat], feat)
-            res = pd.cut(df[feat], bins=pd.IntervalIndex(bins))
-            res = res.map(
-                lambda x: {i: s for i, s in zip(bins, self.bins_[feat])}.get(x)
-            )
-            return res
+            if hasattr(self, 'thresholds_') and feat in self.thresholds_:
+                bin_idxs = np.digitize(df[feat].values, bins=self.thresholds_[feat])
+                bin_idxs = np.clip(bin_idxs, 1, len(self.bins_[feat])) - 1 # digitize is 1-indexed
+                bins_array = np.array(self.bins_[feat])
+                return bins_array[bin_idxs].tolist()
+
+            else: # fallback to pandas discretization
+                bins = self._strs_to_intervals(self.bins_[feat], feat)
+                res = pd.cut(df[feat], bins=pd.IntervalIndex(bins))
+                mapping = {interval: string for interval, string in zip(bins, self.bins_[feat])}
+                return res.map(mapping)
 
         # Exclude any feats already transformed into valid intervals
         already_transformed_feats = self._find_transformed(df, raise_invalid=True)
@@ -211,7 +275,6 @@ class BinTransformer:
         if is_valid_decimal(floor) and is_valid_decimal(ceil):
             return (floor, ceil)
         else:
-            print('dashes', dashes)
             _warn(f"{dashes} there was a problem parsing range in string {value} feature {feat}. {floor} or {ceil} isn't parsable as a float.", RuntimeWarning, 'discretize', 'find_floor_ceil')
             return None
 
@@ -233,7 +296,7 @@ class BinTransformer:
     def _bin_prediscretized_features(self, ruleset):
         discrete = defaultdict(list)
         for cond in ruleset.get_conds():
-            floor_ceil = self.find_floor_ceil(cond.val)
+            floor_ceil = self.find_floor_ceil(cond.val, cond.feature)
             if floor_ceil:
                 discrete[cond.feature].append(floor_ceil)
         for feat, ranges in discrete.items():

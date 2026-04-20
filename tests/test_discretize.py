@@ -32,8 +32,9 @@ def test_boundless_min_max_bins():
     for feat, bins in bin_transformer_.bins_.items():
         prev_ceil = None
         bins = bin_transformer_._strs_to_intervals(bins, feat)
-        assert bins[0].left == float('-inf')
-        assert bins[-1].right == float('inf')
+        assert bins[0].left == float("-inf")
+        assert bins[-1].right == float("inf")
+
 
 def test_fewer_bins_than_n_discretize_bins():
     df = pd.read_csv("credit.csv")
@@ -51,3 +52,35 @@ def test_no_bins():
     bin_transformer_.fit(df)
     bin_transformer_.transform(df)
     assert df.equals(old_df)
+
+
+def test_all_transformed():
+    df = pd.read_csv("credit.csv")
+    bt = BinTransformer()
+    bt.fit(df)
+    transformed = bt.transform(df)
+    len(bt.transform(df.drop("Class", axis=1)).select_dtypes("number").columns) == 0
+
+
+def test_transform_correct_bins_numpy_cut():
+    df = pd.read_csv("credit.csv")
+    bt = BinTransformer(engine='numpy')
+    bt.fit(df)
+    transformed = bt.transform(df)
+    cols = bt.find_continuous_feats(df)
+    for col in cols:
+        for old_val, bin_ in zip(df[col], transformed[col]):
+            floor, ceil = bt._str_to_floor_ceil(bin_, col)
+            assert old_val >= floor and old_val <= ceil
+
+
+def test_transform_correct_bins_pandas_cut():
+    df = pd.read_csv("credit.csv")
+    bt = BinTransformer(engine="pandas")
+    bt.fit(df)
+    transformed = bt.transform(df)
+    cols = bt.find_continuous_feats(df)
+    for col in cols:
+        for old_val, bin_ in zip(df[col], transformed[col]):
+            floor, ceil = bt._str_to_floor_ceil(bin_, col)
+            assert old_val >= floor and old_val <= ceil
