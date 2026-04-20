@@ -532,6 +532,62 @@ def _rule_accuracy_cn(cn, rule, pos_pruneset_idx, neg_pruneset_idx):
     return (tp + tn) / (P + N)
 
 
+def score_precision(actuals, predictions):
+    """Calculate precision score.
+    actuals : iterable<bool>
+    predictions : iterable<bool>
+    """
+    if len(actuals) != len(predictions):
+        raise ValueError(
+            f"Length mismatch: actuals ({len(actuals)}) vs predictions ({len(predictions)})"
+        )
+    total_predicted_pos = sum(predictions)
+    if total_predicted_pos == 0:
+        return None
+    tp = sum([p and a for p, a in zip(predictions, actuals)])
+    return tp / total_predicted_pos
+
+    
+def score_recall(actuals, predictions):
+    """Calculate recall of predictions.
+    actuals : iterable<bool>
+    predictions : iterable<bool>
+    """
+    if len(actuals) != len(predictions):
+        raise ValueError(
+            f"Length mismatch: actuals ({len(actuals)}) vs predictions ({len(predictions)})"
+        )
+    total_pos = sum(actuals)
+    if total_pos == 0:
+        return None
+    tp = sum([p and a for p, a in zip(predictions, actuals)])
+    return tp / total_pos
+
+
+def score_f1(actuals, predictions):
+    """Calculate F1 score.
+    actuals : iterable<bool>
+    predictions : iterable<bool>
+    """
+    if len(actuals) != len(predictions):
+        raise ValueError(
+            f"Length mismatch: actuals ({len(actuals)}) vs predictions ({len(predictions)})"
+        )
+    p = score_precision(actuals, predictions)
+    r = score_recall(actuals, predictions)
+    return _f1(p, r)
+
+
+def _f1(precision, recall):
+    """Calculate F1 from precision and recall.
+    precision : float
+    recall : float
+    """
+    if precision is None or recall is None or (precision + recall) == 0:
+        return None
+    return 2 * precision * recall / (precision + recall)
+
+
 def best_successor(rule, possible_conds, pos_df, neg_df, verbosity=0):
     """Return for a Rule its best successor Rule according to FOIL information gain metric."""
 
