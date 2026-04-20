@@ -388,6 +388,12 @@ If you encounter any issues, or if you have feedback or improvement requests for
 - [_Philosophical Investigations_](https://static1.squarespace.com/static/54889e73e4b0a2c1f9891289/t/564b61a4e4b04eca59c4d232/1447780772744/Ludwig.Wittgenstein.-.Philosophical.Investigations.pdf)
 
 ## Changelog
+#### v0.3.5: 4/19/2026
+- Additional hyperparameters: min_rule_samples, min_ruleset_samples
+- NLP and LLM featurization examples
+- Add rule_stats method: per-rule precision, recall, F1, coverage, with optional example sampling
+- Add engine parameter to BinTransformer ('pandas' default, 'numpy' for faster discretization)
+- Minor bugfixes
 
 #### v0.3.4: 4/3/2022
 - Improvements to predict_proba calculation, including smoothing
